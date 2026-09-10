@@ -286,7 +286,7 @@ select.input option { background: #0b0d14; color: #fff; }
   font-family: 'Montserrat', sans-serif;
 }
 .poster-price-symbol { font-size: 28px; margin-right: 4px; font-weight: 900; }
-.poster-price-big { font-size: 105px; line-height: 0.8; font-weight: 900; letter-spacing:-3px; }
+.poster-price-big { font-size: 105px; line-height: 0.8; font-weight: 900; letter-spacing: -3px; }
 .poster-price-cents { font-size: 42px; font-weight: 900; margin-left: 2px; }
 
 .bi-container { display: flex; flex-direction: column; gap: 16px; }
@@ -362,10 +362,10 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="card-title">IDENTIFICAÇÃO</div>
     <input class="input" id="login-user" placeholder="Usuário (ex: admin)">
     <input class="input" id="login-pass" type="password" placeholder="Senha">
-    <button class="btn-save" id="btn-do-login" style="margin-top:12px">ENTRAR</button>
+    <button class="btn-save" id="btn-do-login" onclick="window.executarLogin()" style="margin-top:12px">ENTRAR</button>
     <div style="text-align:center;margin-top:20px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
       <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">Não possui um usuário de acesso?</div>
-      <button class="btn-more" id="btn-go-solicitar" style="margin-top:0">Solicitar Cadastro de Acesso</button>
+      <button class="btn-more" id="btn-go-solicitar" onclick="window.nav('solicitar')" style="margin-top:0">Solicitar Cadastro de Acesso</button>
     </div>
   </div>
 </div>
@@ -373,7 +373,7 @@ select.input option { background: #0b0d14; color: #fff; }
 <!-- TELA SOLICITAÇÃO -->
 <div id="p-solicitar" class="page">
   <div class="page-header">
-    <button class="back" id="btn-back-to-login">
+    <button class="back" id="btn-back-to-login" onclick="window.nav('login')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> Voltar
     </button>
     <div class="page-title">Solicitar Acesso</div>
@@ -390,7 +390,7 @@ select.input option { background: #0b0d14; color: #fff; }
         <option value="Ambos / Geral">Ambos / Geral</option>
       </select>
       <input class="input" id="sol-telefone" type="tel" placeholder="Telefone de contato (WhatsApp)">
-      <button class="btn-save" id="btn-send-solicitacao">Enviar Solicitação</button>
+      <button class="btn-save" id="btn-send-solicitacao" onclick="window.executarSolicitacao()">Enviar Solicitação</button>
     </div>
   </div>
 </div>
@@ -1029,7 +1029,8 @@ window.atualizarVisibilidadeMenu = function() {
     if (isAdm) {
       document.querySelectorAll('.menu-btn').forEach(function(b){ b.style.display = 'flex'; });
       document.querySelectorAll('[data-perm]').forEach(function(el){ el.style.display = 'flex'; });
-      document.getElementById('admin-section').style.display = 'block';
+      var admSec = document.getElementById('admin-section');
+      if (admSec) admSec.style.display = 'block';
     } else if (usuarioLogado.permissoes) {
       usuarioLogado.permissoes.forEach(function(p){
         var btnModulo = document.querySelector('.menu-btn[data-nav="' + p + '"]');
@@ -1039,7 +1040,8 @@ window.atualizarVisibilidadeMenu = function() {
           el.style.display = 'flex';
         });
       });
-      document.getElementById('admin-section').style.display = 'none';
+      var admSec = document.getElementById('admin-section');
+      if (admSec) admSec.style.display = 'none';
     }
   }
 };
@@ -1166,6 +1168,77 @@ window.pararScannerAoVivo = function() {
   }
 };
 
+window.executarLogin = function() {
+  var u = (document.getElementById('login-user').value || '').trim();
+  var p = (document.getElementById('login-pass').value || '').trim();
+  if(!u || !p) { window.toast('Preencha usuário e senha!', 'er'); return; }
+  
+  var btn = document.getElementById('btn-do-login'); 
+  if (btn) { btn.disabled = true; btn.textContent = 'Aguarde...'; }
+
+  var timerTrava = setTimeout(function() {
+    if (btn) { btn.disabled = false; btn.textContent = 'ENTRAR'; }
+    window.toast('Servidor demorou a responder. Tente novamente.', 'er');
+  }, 28000);
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      clearTimeout(timerTrava);
+      if (btn) { btn.disabled = false; btn.textContent = 'ENTRAR'; }
+      
+      if(res && res.sucesso) {
+        usuarioLogado = res.usuario;
+        var primeiroNome = usuarioLogado.nome ? usuarioLogado.nome.split(' ')[0] : 'Usuário';
+        document.getElementById('user-greet').textContent = 'Olá, ' + primeiroNome + '!';
+        var respInput = document.getElementById('resp');
+        if (respInput) respInput.value = usuarioLogado.nome || '';
+        
+        window.atualizarVisibilidadeMenu();
+        window.toast('Login efetuado com sucesso!', 'ok'); 
+        window.nav('home');
+      } else { 
+        window.toast(res ? res.mensagem : 'Usuário ou senha inválidos!', 'er'); 
+      }
+    })
+    .withFailureHandler(function(err){
+      clearTimeout(timerTrava);
+      if (btn) { btn.disabled = false; btn.textContent = 'ENTRAR'; }
+      window.toast('Erro no servidor ao realizar login.', 'er');
+    })
+    .fazerLogin(u, p);
+};
+
+window.executarSolicitacao = function() {
+  var nome = (document.getElementById('sol-nome').value || '').trim();
+  var funcao = (document.getElementById('sol-funcao').value || '').trim();
+  var local = document.getElementById('sol-local').value;
+  var telefone = (document.getElementById('sol-telefone').value || '').trim();
+
+  if(!nome || !funcao || !local || !telefone) { 
+    window.toast('Preencha todos os campos da solicitação!', 'er'); 
+    return; 
+  }
+
+  var btn = document.getElementById('btn-send-solicitacao'); 
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+  
+  google.script.run
+    .withSuccessHandler(function(res){
+      if (btn) { btn.disabled = false; btn.textContent = 'Enviar Solicitação'; }
+      if(res && res.sucesso) { 
+        window.toast(res.mensagem, 'ok'); 
+        window.nav('login'); 
+      } else { 
+        window.toast(res ? res.mensagem : 'Erro na solicitação', 'er'); 
+      }
+    })
+    .withFailureHandler(function(err){ 
+      if (btn) { btn.disabled = false; btn.textContent = 'Enviar Solicitação'; }
+      window.toast('Erro de comunicação.', 'er'); 
+    })
+    .solicitarAcesso({ nome: nome, funcao: funcao, local: local, telefone: telefone });
+};
+
 document.addEventListener('DOMContentLoaded', function() {
 
   document.querySelectorAll('[data-nav]').forEach(function(btn){
@@ -1175,65 +1248,6 @@ document.addEventListener('DOMContentLoaded', function() {
       if (drawer) drawer.style.display = 'none';
       window.nav(target);
     });
-  });
-
-  safeAddEvent('btn-do-login', 'click', function(){
-    var u = document.getElementById('login-user').value.trim();
-    var p = document.getElementById('login-pass').value.trim();
-    if(!u || !p) { window.toast('Preencha usuário e senha!', 'er'); return; }
-    
-    var btn = this; 
-    btn.disabled = true; 
-    btn.textContent = 'Aguarde...';
-
-    var timerTrava = setTimeout(function() {
-      btn.disabled = false;
-      btn.textContent = 'ENTRAR';
-      window.toast('Servidor demorou a responder. Clique em ENTRAR novamente.', 'er');
-    }, 25000);
-
-    google.script.run
-      .withSuccessHandler(function(res){
-        clearTimeout(timerTrava);
-        btn.disabled = false; 
-        btn.textContent = 'ENTRAR';
-        
-        if(res && res.sucesso) {
-          usuarioLogado = res.usuario;
-          var primeiroNome = usuarioLogado.nome ? usuarioLogado.nome.split(' ')[0] : 'Usuário';
-          document.getElementById('user-greet').textContent = 'Olá, ' + primeiroNome + '!';
-          document.getElementById('resp').value = usuarioLogado.nome || '';
-          
-          window.atualizarVisibilidadeMenu();
-          window.toast('Login efetuado com sucesso!', 'ok'); 
-          window.nav('home');
-        } else { 
-          window.toast(res ? res.mensagem : 'Usuário ou senha inválidos!', 'er'); 
-        }
-      })
-      .withFailureHandler(function(err){
-        clearTimeout(timerTrava);
-        btn.disabled = false; 
-        btn.textContent = 'ENTRAR'; 
-        window.toast('Erro no servidor.', 'er');
-      })
-      .fazerLogin(u, p);
-  });
-
-  safeAddEvent('btn-send-solicitacao', 'click', function(){
-    var nome = document.getElementById('sol-nome').value.trim();
-    var funcao = document.getElementById('sol-funcao').value.trim();
-    var local = document.getElementById('sol-local').value;
-    var telefone = document.getElementById('sol-telefone').value.trim();
-
-    if(!nome || !funcao || !local || !telefone) { window.toast('Preencha todos os campos da solicitação!', 'er'); return; }
-
-    var btn = this; btn.disabled = true; btn.textContent = 'Enviando...';
-    google.script.run.withSuccessHandler(function(res){
-        btn.disabled = false; btn.textContent = 'Enviar Solicitação';
-        if(res.sucesso) { window.toast(res.mensagem, 'ok'); window.nav('login'); } else { window.toast(res.mensagem, 'er'); }
-      }).withFailureHandler(function(err){ btn.disabled = false; btn.textContent = 'Enviar Solicitação'; window.toast('Erro', 'er'); })
-      .solicitarAcesso({ nome: nome, funcao: funcao, local: local, telefone: telefone });
   });
 
   safeAddEvent('file-cam-input', 'change', async function(e) {
@@ -1586,8 +1600,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (submenu.style.display === 'flex') { submenu.style.display = 'none'; chevron.style.transform = 'rotate(0deg)'; } 
     else { submenu.style.display = 'flex'; chevron.style.transform = 'rotate(180deg)'; }
   });
-  safeAddEvent('btn-go-solicitar', 'click', function(){ window.nav('solicitar'); });
-  safeAddEvent('btn-back-to-login', 'click', function(){ window.nav('login'); });
   safeAddEvent('btn-logout', 'click', function(){
     usuarioLogado = null; document.getElementById('login-user').value = ''; document.getElementById('login-pass').value = '';
     document.getElementById('drawer-tools').style.display = 'none'; window.toast('Sessão encerrada.', 'ok'); window.nav('login');
@@ -2664,4 +2676,105 @@ window.carregarSolicitacoesPendentes = function() {
           google.script.run.withSuccessHandler(function(res){ 
             window.toast(res ? res.mensagem : 'Processado', res && res.sucesso ? 'ok' : 'er'); 
             if (res && res.sucesso) window.carregarSolicitacoesPendentes(); 
-          }).Não tenho como te ajudar. Sou só um modelo de linguagem e não entendo o que você está me pedindo.
+          }).aprovarSolicitacao(solId, uVal, sVal, perms);
+        }); 
+      });
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-admin').style.display = 'none';
+      window.toast('Erro ao carregar solicitações.', 'er');
+    })
+    .getSolicitacoesPendentes();
+};
+
+// DASHBOARD BI & NOTIFICAÇÕES
+window.carregarRelatorio = function() {
+  document.getElementById('load-rel').style.display = 'block';
+  document.getElementById('bi-container').style.display = 'none';
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('load-rel').style.display = 'none'; 
+      document.getElementById('bi-container').style.display = 'grid'; 
+      
+      rawBiData = data || { historico: [], dashboard: [], produtos: [] };
+      
+      var cats = new Set(), resps = new Set(); 
+      rawBiData.historico.forEach(function(h) { 
+        cats.add((h.categoria || '').toUpperCase()); 
+        resps.add(h.responsavel); 
+      });
+      
+      var cHtml='<option value="TODAS">Todas as Categorias</option>';
+      var rHtml='<option value="TODOS">Todos os Usuários</option>'; 
+      cats.forEach(function(c) { cHtml += '<option value="'+c+'">'+c+'</option>'; }); 
+      resps.forEach(function(r) { rHtml += '<option value="'+r+'">'+r+'</option>'; });
+      
+      document.getElementById('bi-filter-cat').innerHTML = cHtml; 
+      document.getElementById('bi-filter-resp').innerHTML = rHtml; 
+      
+      window.processarERenderizarBI();
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-rel').style.display = 'none'; 
+      window.toast('Erro ao carregar Dashboard.', 'er');
+    })
+    .getBIFullData();
+};
+
+window.processarERenderizarBI = function() {
+  if (!rawBiData) return;
+  var fCat = document.getElementById('bi-filter-cat').value, fResp = document.getElementById('bi-filter-resp').value, fAno = document.getElementById('bi-filter-ano').value;
+  
+  var filtrados = rawBiData.historico.filter(function(h) { 
+    var dt = h.dataHora || ''; 
+    return (fAno === 'TODOS' || dt.indexOf(fAno) !== -1) && (fCat === 'TODAS' || (h.categoria || '').toUpperCase() === fCat) && (fResp === 'TODOS' || h.responsavel === fResp); 
+  });
+  
+  var totContado = 0, totOk = 0, totDiff = 0, catsDivergentes = {}, datasAgrupadas = {};
+  
+  filtrados.forEach(function(item) { 
+    totContado += item.qtdContada; 
+    if (item.diferenca === 0) totOk++; 
+    else { 
+      totDiff++; 
+      var c = (item.categoria || 'OUTROS').toUpperCase(); 
+      catsDivergentes[c] = (catsDivergentes[c] || 0) + 1; 
+    } 
+    var dataApenas = (item.dataHora || '').split(' ')[0] || 'Geral'; 
+    datasAgrupadas[dataApenas] = (datasAgrupadas[dataApenas] || 0) + item.qtdContada; 
+  });
+  
+  document.getElementById('bi-kpi-tot-contado').textContent = totContado; 
+  document.getElementById('bi-kpi-tot-ok').textContent = totOk; 
+  document.getElementById('bi-kpi-tot-diff').textContent = totDiff; 
+  document.getElementById('bi-kpi-acuracia').textContent = (filtrados.length > 0 ? Math.round((totOk / filtrados.length) * 100) : 100) + '%';
+  
+  if (chartTrendInstance) chartTrendInstance.destroy(); 
+  chartTrendInstance = new Chart(document.getElementById('chart-trend').getContext('2d'), { type: 'line', data: { labels: Object.keys(datasAgrupadas), datasets: [{ label: 'Volume Contado', data: Object.values(datasAgrupadas), borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.15)', fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+  
+  if (chartCatInstance) chartCatInstance.destroy(); 
+  chartCatInstance = new Chart(document.getElementById('chart-cat').getContext('2d'), { type: 'doughnut', data: { labels: Object.keys(catsDivergentes), datasets: [{ data: Object.values(catsDivergentes), backgroundColor: ['#f87171', '#fbbf24', '#38bdf8', '#a78bfa', '#34d399'] }] }, options: { responsive: true, maintainAspectRatio: false } });
+};
+
+window.carregarNotificacoes = function() { 
+  document.getElementById('load-notif').style.display = 'block'; 
+  document.getElementById('notif-list').innerHTML = ''; 
+  google.script.run
+    .withSuccessHandler(function(data) { 
+      document.getElementById('load-notif').style.display = 'none'; 
+      var html = ''; 
+      ((data && data.historico) || []).filter(function(h) { return h.diferenca !== 0; }).slice(0, 10).forEach(function(d) { 
+        html += '<div class="card"><div class="prod-item"><div class="prod-info"><div class="prod-name">' + d.nome + '</div><div class="prod-meta">Por ' + d.responsavel + '</div></div><div style="font-weight:800;color:' + (d.diferenca < 0 ? '#f87171' : '#fbbf24') + '">' + (d.diferenca < 0 ? 'Falta ' : 'Sobra ') + d.diferenca + '</div></div></div>'; 
+      }); 
+      document.getElementById('notif-list').innerHTML = html || '<div class="card empty">Nenhuma notificação.</div>'; 
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-notif').style.display = 'none'; 
+      window.toast('Erro ao carregar notificações.', 'er');
+    })
+    .getBIFullData(); 
+};
+</script>
+</body>
+</html>
