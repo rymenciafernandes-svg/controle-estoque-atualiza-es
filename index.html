@@ -474,7 +474,7 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="card">
       <div class="card-title">Pesquisar Produto</div>
       <div class="input-group">
-        <input class="input" id="search-input" placeholder="Buscar por Nome, ID ou Cód. Barras..." oninput="window.renderContagem()">
+        <input class="input" id="search-input" placeholder="Buscar por Nome, ID ou Cód. Barras...">
         <button class="btn-cam" id="btn-cam-search" title="Escanear com Câmera">
           <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
@@ -523,7 +523,7 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="card">
       <div class="card-title">Produtos cadastrados</div>
       <div class="input-group" style="margin-bottom:12px">
-        <input class="input" id="search-cad-input" placeholder="Pesquisar por Nome, ID ou Cód. Barras..." oninput="window.renderListaCadastrados()">
+        <input class="input" id="search-cad-input" placeholder="Pesquisar por Nome, ID ou Cód. Barras...">
         <button class="btn-cam" id="btn-cam-cad-search" title="Escanear para Pesquisar">
           <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
@@ -590,7 +590,7 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="card">
       <div class="card-title">REGISTRAR VENCIMENTO DE PRODUTO</div>
       <div class="input-group" style="margin-bottom:8px">
-        <input class="input" id="val-search-input" placeholder="Buscar por Nome, ID ou Cód..." oninput="window.popularSelectValidades()">
+        <input class="input" id="val-search-input" placeholder="Buscar por Nome, ID ou Cód...">
         <button class="btn-cam" id="btn-cam-val-search" title="Escanear com Câmera">
           <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
@@ -634,7 +634,7 @@ select.input option { background: #0b0d14; color: #fff; }
         <div class="card-title" style="margin-bottom:0">PESQUISAR PRODUTOR / CLIENTE</div>
         <button class="btn" id="btn-open-add-nf-modal" style="padding:6px 12px;font-size:11px;border-radius:8px;background:linear-gradient(135deg,#10b981,#059669)">➕ Novo Cadastro</button>
       </div>
-      <input class="input" id="nf-search-input" placeholder="Digite para buscar..." oninput="window.renderAbaSelecionadaNF()">
+      <input class="input" id="nf-search-input" placeholder="Digite para buscar...">
       <div class="card-title" style="margin-top:10px;margin-bottom:4px">CATEGORIA / FILTRO</div>
       <select class="input" id="nf-filter-cat" style="margin-bottom:0"><option value="TODAS">Todas as Categorias</option></select>
     </div>
@@ -719,7 +719,7 @@ select.input option { background: #0b0d14; color: #fff; }
       <button class="del" id="btn-close-add-item" style="width:36px;height:36px">&#x2715;</button>
     </div>
     <div class="input-group" style="margin-bottom:12px;flex-shrink:0">
-      <input class="input" id="search-add-item" placeholder="Buscar por Nome, ID ou Cód..." oninput="window.renderListaAdicaoItem()" onkeyup="window.renderListaAdicaoItem()">
+      <input class="input" id="search-add-item" placeholder="Buscar por Nome, ID ou Cód...">
     </div>
     <div id="lista-add-item" style="flex:1;overflow-y:auto;border-top:1px solid rgba(255,255,255,0.08);padding-top:12px"></div>
   </div>
@@ -921,6 +921,8 @@ var rawBiData = null;
 var html5QrCodeLive = null;
 var zoomAtual = 1;
 
+var mapaValidades = {};
+
 function safeAddEvent(id, evt, fn) {
   var el = document.getElementById(id);
   if (el) el.addEventListener(evt, fn);
@@ -945,6 +947,18 @@ window.toast = function(t, tipo) {
   el.className = 'toast t-' + tipo;
   el.classList.add('show');
   setTimeout(function(){ el.classList.remove('show'); }, 3500);
+};
+
+window.atualizarMapaValidades = function() {
+  mapaValidades = {};
+  (validadesData || []).forEach(function(v) {
+    if (v.dataVenc) {
+      var id = norm(v.idProduto || v.id || v.produtoId);
+      var cod = norm(v.codBarra || v.codigoBarras);
+      if(id) mapaValidades['id_' + id] = v.dataVenc;
+      if(cod) mapaValidades['cod_' + cod] = v.dataVenc;
+    }
+  });
 };
 
 window.atualizarVisibilidadeMenu = function() {
@@ -1226,9 +1240,18 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('btn-cam-cad-search', 'click', function() { window.abrirScannerAoVivo('search-cad-input', function() { window.renderListaCadastrados(); }); });
   safeAddEvent('btn-cam-val-search', 'click', function() { window.abrirScannerAoVivo('val-search-input', function() { window.popularSelectValidades(); }); });
 
-  // CARTAZ PROMOCIONAL
-  safeAddEvent('cartaz-search', 'input', window.debounce(function() { window.popularSelectCartaz(); }, 300));
+  // EVENTOS DE BUSCA OTIMIZADOS COM DEBOUNCE (SEM TRAVAR A TELA)
+  safeAddEvent('search-input', 'input', window.debounce(function(){ limiteExibicao = 50; window.renderContagem(); }, 250));
+  safeAddEvent('search-cad-input', 'input', window.debounce(function(){ limiteCadExibicao = 50; window.renderListaCadastrados(); }, 250));
+  safeAddEvent('search-add-item', 'input', window.debounce(function(){ window.renderListaAdicaoItem(); }, 250));
+  safeAddEvent('val-search-input', 'input', window.debounce(function(){ window.popularSelectValidades(); }, 250));
+  safeAddEvent('cartaz-search', 'input', window.debounce(function(){ window.popularSelectCartaz(); }, 250));
+  safeAddEvent('nf-search-input', 'input', window.debounce(function(){ window.renderAbaSelecionadaNF(); }, 250));
+
+  safeAddEvent('filter-cat', 'change', function(){ limiteExibicao = 50; window.renderContagem(); });
   safeAddEvent('cartaz-filter-cat', 'change', function() { window.popularSelectCartaz(); });
+  safeAddEvent('val-filter-cat', 'change', function() { window.popularSelectValidades(); });
+  
   safeAddEvent('cartaz-select-prod', 'change', function() {
     var id = this.value;
     var prod = produtosContagem.find(function(p){ return String(p.id) === String(id); });
@@ -1270,10 +1293,6 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .atualizarCache();
   });
-
-  // VALIDADES FILTROS E SALVAMENTO
-  safeAddEvent('val-search-input', 'input', window.debounce(function() { window.popularSelectValidades(); }, 300));
-  safeAddEvent('val-filter-cat', 'change', function() { window.popularSelectValidades(); });
 
   safeAddEvent('btn-save-validade', 'click', function() {
     var idProd = document.getElementById('val-select-prod').value;
@@ -1480,8 +1499,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('drawer-tools').style.display = 'none'; window.toast('Sessão encerrada.', 'ok'); window.nav('login');
   });
 
-  safeAddEvent('filter-cat', 'change', function(){ limiteExibicao = 50; window.renderContagem(); });
-
   safeAddEvent('btn-save-cont', 'click', function() {
     var resp = document.getElementById('resp').value.trim();
     if (!resp) { window.toast('Informe quem está realizando a contagem!', 'er'); return; }
@@ -1611,9 +1628,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }).salvarClienteExterno(payload);
   });
 
-  safeAddEvent('nf-search-input', 'input', window.debounce(function() { window.renderAbaSelecionadaNF(); }, 300));
-  safeAddEvent('nf-filter-cat', 'change', function() { window.renderAbaSelecionadaNF(); });
-
 });
 
 // FUNCTIONS CONTAGEM, CADASTRO, ADM E BI
@@ -1625,7 +1639,11 @@ window.carregarContagem = function() {
 
   google.script.run
     .withSuccessHandler(function(prods) {
-      produtosContagem = prods || [];
+      produtosContagem = (prods || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '')).toLowerCase();
+        p._c = (p.categoria || 'GERAL').toUpperCase();
+        return p;
+      });
       if (loadEl) loadEl.style.display = 'none';
       window.popularFiltroCategorias(produtosContagem);
       window.renderContagem();
@@ -1633,6 +1651,7 @@ window.carregarContagem = function() {
       google.script.run
         .withSuccessHandler(function(vencs) {
           validadesData = vencs || [];
+          window.atualizarMapaValidades();
           window.renderContagem();
         })
         .withFailureHandler(function(err) {
@@ -1665,21 +1684,12 @@ window.gerarMetaHtml = function(p, qtd) {
   }
   metaHtml += ' | Ideal: ' + ideal;
   
-  var valMatch = (validadesData || []).find(function(v) {
-    if (!v) return false;
-    var vId = norm(v.idProduto || v.id || v.produtoId);
-    var pId = norm(p.id);
-    var vNome = norm(v.nome || v.produto || v.nomeProduto);
-    var pNome = norm(p.nome);
-    var vCod = norm(v.codBarra || v.codigoBarras);
-    var pCod = norm(p.codBarra);
+  var pId = norm(p.id);
+  var pCod = norm(p.codBarra);
+  var vencMatch = mapaValidades['id_' + pId] || mapaValidades['cod_' + pCod];
 
-    return (vId && pId && vId === pId) ||
-           (vCod && pCod && vCod === pCod) ||
-           (vNome && pNome && vNome === pNome);
-  });
-  if (valMatch && valMatch.dataVenc) {
-    metaHtml += ' | <span style="color:#fbbf24;font-weight:800;">📅 Venc: ' + valMatch.dataVenc + '</span>';
+  if (vencMatch) {
+    metaHtml += ' | <span style="color:#fbbf24;font-weight:800;">📅 Venc: ' + vencMatch + '</span>';
   }
 
   if (contagensAtuais[p.id] !== undefined && contagensAtuais[p.id] > 0) {
@@ -1697,9 +1707,10 @@ window.renderContagem = function() {
   var catFiltro = document.getElementById('filter-cat').value;
 
   if (!produtosContagem || produtosContagem.length === 0) { container.innerHTML = '<div class="card empty">Nenhum produto no Cache. Atualize a base.</div>'; return; }
+  
   var filtrados = produtosContagem.filter(function(p) {
-    var matchBusca = !busca || (p.nome || '').toLowerCase().indexOf(busca) > -1 || (p.id || '').toString().toLowerCase().indexOf(busca) > -1 || (p.codBarra || '').toString().toLowerCase().indexOf(busca) > -1;
-    var matchCat = (catFiltro === 'TODAS') || ((p.categoria || '').toUpperCase() === catFiltro);
+    var matchBusca = !busca || p._s.indexOf(busca) > -1;
+    var matchCat = (catFiltro === 'TODAS') || (p._c === catFiltro);
     return matchBusca && matchCat;
   });
 
@@ -1708,7 +1719,7 @@ window.renderContagem = function() {
   var exibidos = filtrados.slice(0, limiteExibicao);
   var grupos = {};
   exibidos.forEach(function(p) {
-    var cat = (p.categoria || 'GERAL').toUpperCase();
+    var cat = p._c || 'GERAL';
     if (!grupos[cat]) grupos[cat] = [];
     grupos[cat].push(p);
   });
@@ -1765,13 +1776,22 @@ window.verificarBotaoSalvar = function() { document.getElementById('btn-save-con
 
 window.carregarProdutos = function() {
   document.getElementById('load-prod').style.display = 'block'; document.getElementById('plist').innerHTML = '';
-  google.script.run.withSuccessHandler(function(dados) { prodsCadastrados = dados || []; document.getElementById('load-prod').style.display = 'none'; window.renderListaCadastrados(); })
-  .withFailureHandler(function(err) { document.getElementById('load-prod').style.display = 'none'; window.toast('Erro ao carregar.', 'er'); }).getProdutos();
+  google.script.run.withSuccessHandler(function(dados) { 
+    prodsCadastrados = (dados || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '') + ' ' + (p.categoria || '')).toLowerCase();
+        return p;
+    });
+    document.getElementById('load-prod').style.display = 'none'; window.renderListaCadastrados(); 
+  }).withFailureHandler(function(err) { document.getElementById('load-prod').style.display = 'none'; window.toast('Erro ao carregar.', 'er'); }).getProdutos();
 };
 
 window.renderListaCadastrados = function() {
   var container = document.getElementById('plist'); var busca = (document.getElementById('search-cad-input').value || '').toLowerCase().trim();
-  var filtrados = prodsCadastrados.filter(function(p) { return !busca || (p.nome || '').toLowerCase().indexOf(busca) > -1 || (p.id || '').toString().toLowerCase().indexOf(busca) > -1 || (p.codBarra || '').toString().toLowerCase().indexOf(busca) > -1 || (p.categoria || '').toLowerCase().indexOf(busca) > -1; });
+  
+  var filtrados = prodsCadastrados.filter(function(p) { 
+    return !busca || p._s.indexOf(busca) > -1; 
+  });
+  
   if (filtrados.length === 0) { container.innerHTML = '<div class="card empty">Nenhum produto cadastrado.</div>'; return; }
   var html = '';
   filtrados.slice(0, limiteCadExibicao).forEach(function(p) {
@@ -2026,9 +2046,16 @@ window.abrirModalAdicaoItem = function(index) {
   document.getElementById('add-item-sub').textContent = 'Relatório: ' + relatorioAtivoAdicao.dataHora;
   document.getElementById('modal-add-item').style.display = 'flex';
   document.getElementById('search-add-item').value = '';
+  
   if (produtosContagem.length === 0) {
     document.getElementById('lista-add-item').innerHTML = '<div class="loading"><div class="spin"></div>Carregando base...</div>';
-    google.script.run.withSuccessHandler(function(dados) { produtosContagem = dados || []; window.renderListaAdicaoItem(); }).getProdutos();
+    google.script.run.withSuccessHandler(function(dados) { 
+      produtosContagem = (dados || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '')).toLowerCase();
+        return p;
+      });
+      window.renderListaAdicaoItem(); 
+    }).getProdutos();
   } else { window.renderListaAdicaoItem(); }
 };
 
@@ -2045,11 +2072,7 @@ window.renderListaAdicaoItem = function() {
 
   var filtrados = produtosContagem.filter(function(p) {
     if (!p) return false;
-    if (!busca) return true;
-    var pNome = String(p.nome || '').toLowerCase();
-    var pId = String(p.id || '').toLowerCase();
-    var pCod = String(p.codBarra || '').toLowerCase();
-    return pNome.indexOf(busca) > -1 || pId.indexOf(busca) > -1 || pCod.indexOf(busca) > -1;
+    return !busca || (p._s && p._s.indexOf(busca) > -1);
   });
 
   if (filtrados.length === 0) {
@@ -2101,7 +2124,11 @@ window.carregarValidades = function() {
   
   if (produtosContagem.length === 0) {
     google.script.run.withSuccessHandler(function(prods) {
-      produtosContagem = prods || [];
+      produtosContagem = (prods || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '')).toLowerCase();
+        p._c = (p.categoria || 'GERAL').toUpperCase();
+        return p;
+      });
       window.popularSelectValidades();
     }).getProdutos();
   } else {
@@ -2110,6 +2137,7 @@ window.carregarValidades = function() {
   google.script.run.withSuccessHandler(function(dados) {
     document.getElementById('load-validades').style.display = 'none';
     validadesData = dados || [];
+    window.atualizarMapaValidades();
     window.renderListaValidades();
   }).withFailureHandler(function(err) {
     document.getElementById('load-validades').style.display = 'none';
@@ -2133,8 +2161,8 @@ window.popularSelectValidades = function() {
   }
 
   var filtrados = produtosContagem.filter(function(p) {
-    var matchBusca = !busca || (p.nome || '').toLowerCase().indexOf(busca) > -1 || (p.id || '').toString().toLowerCase().indexOf(busca) > -1 || (p.codBarra || '').toString().toLowerCase().indexOf(busca) > -1;
-    var matchCat = (catFiltro === 'TODAS') || ((p.categoria || '').toUpperCase() === catFiltro);
+    var matchBusca = !busca || p._s.indexOf(busca) > -1;
+    var matchCat = (catFiltro === 'TODAS') || (p._c === catFiltro);
     return matchBusca && matchCat;
   });
   
@@ -2196,7 +2224,11 @@ window.deletarValidade = function(row) {
 window.prepararTelaCartaz = function() {
   if (produtosContagem.length === 0) {
     google.script.run.withSuccessHandler(function(prods) {
-      produtosContagem = prods || [];
+      produtosContagem = (prods || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '')).toLowerCase();
+        p._c = (p.categoria || 'GERAL').toUpperCase();
+        return p;
+      });
       window.popularSelectCartaz();
     }).getProdutos();
   } else {
@@ -2220,8 +2252,8 @@ window.popularSelectCartaz = function() {
   }
 
   var filtrados = produtosContagem.filter(function(p) {
-    var matchBusca = !busca || (p.nome || '').toLowerCase().indexOf(busca) > -1 || (p.id || '').toString().toLowerCase().indexOf(busca) > -1 || (p.codBarra || '').toString().toLowerCase().indexOf(busca) > -1;
-    var matchCat = (catFiltro === 'TODAS') || ((p.categoria || '').toUpperCase() === catFiltro);
+    var matchBusca = !busca || p._s.indexOf(busca) > -1;
+    var matchCat = (catFiltro === 'TODAS') || (p._c === catFiltro);
     return matchBusca && matchCat;
   });
   
