@@ -16,7 +16,7 @@
 // ============================================
 // PONTE DE COMUNICAÇÃO GITHUB -> GOOGLE SHEETS
 // ============================================
-const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyeDDnauW6C8bKd3Wu8v86kInr5_YFkBpCjoxMT7lr9512CAD5VxSGW57oFqeE_Ozyn/exec";
+const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwjgjAVlLwoSIcpelToBRR69u2Yy19bR34eOE9O5gGoqprMaotmWQKbGqUJ7sbTUoLn/exec";
 
 if (typeof google === 'undefined' || !google.script || !google.script.run) {
   window.google = window.google || {};
@@ -968,6 +968,7 @@ var adminUsuariosList = [];
 var nfDadosList = [];
 var fatDadosObj = { fichario: [], email: [], caixaResponsavel: [], whatsapp: [], entrega: [], avisos: [] };
 var vencClientesList = [];
+var limiteVencCliExibicao = 50;
 var abaNFAtiva = 'nf';
 
 var chartTrendInstance = null;
@@ -1238,7 +1239,6 @@ window.executarSolicitacao = function() {
     })
     .solicitarAcesso({ nome: nome, funcao: funcao, local: local, telefone: telefone });
 };
-
 document.addEventListener('DOMContentLoaded', function() {
 
   document.querySelectorAll('[data-nav]').forEach(function(btn){
@@ -1317,10 +1317,10 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('val-search-input', 'input', window.debounce(function(){ window.popularSelectValidades(); }, 250));
   safeAddEvent('cartaz-search', 'input', window.debounce(function(){ window.popularSelectCartaz(); }, 250));
   safeAddEvent('nf-search-input', 'input', window.debounce(function(){ window.renderAbaSelecionadaNF(); }, 250));
-  safeAddEvent('venc-cli-search', 'input', window.debounce(function(){ window.renderListaVencClientes(); }, 250));
-  safeAddEvent('venc-cli-filter-cat', 'change', function(){ window.renderListaVencClientes(); });
-  safeAddEvent('venc-cli-dt-de', 'change', function(){ window.renderListaVencClientes(); });
-  safeAddEvent('venc-cli-dt-ate', 'change', function(){ window.renderListaVencClientes(); });
+  safeAddEvent('venc-cli-search', 'input', window.debounce(function(){ limiteVencCliExibicao = 50; window.renderListaVencClientes(); }, 250));
+  safeAddEvent('venc-cli-filter-cat', 'change', function(){ limiteVencCliExibicao = 50; window.renderListaVencClientes(); });
+  safeAddEvent('venc-cli-dt-de', 'change', function(){ limiteVencCliExibicao = 50; window.renderListaVencClientes(); });
+  safeAddEvent('venc-cli-dt-ate', 'change', function(){ limiteVencCliExibicao = 50; window.renderListaVencClientes(); });
 
   safeAddEvent('filter-cat', 'change', function(){ limiteExibicao = 50; window.renderContagem(); });
   safeAddEvent('cartaz-filter-cat', 'change', function() { window.popularSelectCartaz(); });
@@ -1964,17 +1964,20 @@ window.carregarNotasFiscais = function() {
 };
 
 window.carregarVencimentosClientesPage = function() {
-  document.getElementById('load-venc-cli').style.display = 'block';
-  document.getElementById('lista-venc-cliente').innerHTML = '';
+  var loadEl = document.getElementById('load-venc-cli');
+  if (loadEl) loadEl.style.display = 'block';
+  var listEl = document.getElementById('lista-venc-cliente');
+  if (listEl) listEl.innerHTML = '';
+  limiteVencCliExibicao = 50;
 
   google.script.run
     .withSuccessHandler(function(lista) {
-      document.getElementById('load-venc-cli').style.display = 'none';
+      if (loadEl) loadEl.style.display = 'none';
       vencClientesList = lista || [];
       window.renderListaVencClientes();
     })
     .withFailureHandler(function(err) {
-      document.getElementById('load-venc-cli').style.display = 'none';
+      if (loadEl) loadEl.style.display = 'none';
       window.toast('Erro ao carregar vencimentos de clientes.', 'er');
     })
     .getVencimentosClientes();
@@ -2182,8 +2185,9 @@ window.renderListaVencClientes = function() {
     return;
   }
 
+  var exibidos = filtrados.slice(0, limiteVencCliExibicao);
   var html = '';
-  filtrados.forEach(function(item) {
+  exibidos.forEach(function(item) {
     var badgeClass = 'b-ok';
     var statusTxt = 'Dia a Dia / Hoje';
     
@@ -2221,7 +2225,19 @@ window.renderListaVencClientes = function() {
     '</div>';
   });
 
+  if (filtrados.length > limiteVencCliExibicao) {
+    html += '<button class="btn-more" id="btn-load-more-venc-cli">Carregar Mais (' + (filtrados.length - limiteVencCliExibicao) + ' restantes)</button>';
+  }
+
   container.innerHTML = html;
+
+  var btnLoadMore = document.getElementById('btn-load-more-venc-cli');
+  if (btnLoadMore) {
+    btnLoadMore.addEventListener('click', function() {
+      limiteVencCliExibicao += 50;
+      window.renderListaVencClientes();
+    });
+  }
 };
 
 window.abrirModalVencCliente = function(id) {
@@ -2243,7 +2259,6 @@ window.alternarFormModalAddNF = function() {
     document.getElementById('group-fat-resp').style.display = document.getElementById('add-fat-cat').value === 'CAIXA' ? 'block' : 'none';
   }
 };
-
 // HISTÓRICO DE RELATÓRIOS
 window.carregarHistorico = function() {
   document.getElementById('load-historico').style.display = 'block';
