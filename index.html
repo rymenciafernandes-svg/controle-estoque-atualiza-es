@@ -907,6 +907,7 @@ var prodsCadastrados = [];
 var limiteCadExibicao = 50;
 
 var historicoSalvoData = [];
+var relatorioAtivoAdicao = null;
 var validadesData = [];
 var adminUsuariosList = [];
 
@@ -1223,7 +1224,7 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('btn-cam-search', 'click', function() { window.abrirScannerAoVivo('search-input', function() { window.renderContagem(); }); });
   safeAddEvent('btn-cam-cad', 'click', function() { window.abrirScannerAoVivo('ncodbarra', window.consultarProdutoInternet); });
   safeAddEvent('btn-cam-cad-search', 'click', function() { window.abrirScannerAoVivo('search-cad-input', function() { window.renderListaCadastrados(); }); });
-  safeAddEvent('btn-cam-val-search', 'click', function() { window.abrirScannerAoVivo('val-search-input', window.popularSelectValidades); });
+  safeAddEvent('btn-cam-val-search', 'click', function() { window.abrirScannerAoVivo('val-search-input', function() { window.popularSelectValidades(); }); });
 
   // CARTAZ PROMOCIONAL
   safeAddEvent('cartaz-search', 'input', window.debounce(function() { window.popularSelectCartaz(); }, 300));
@@ -1238,6 +1239,9 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   safeAddEvent('cartaz-prod-name', 'input', window.atualizarPreviewCartaz);
   safeAddEvent('cartaz-prod-price', 'input', window.atualizarPreviewCartaz);
+
+  // PESQUISA NO MODAL ADICIONAR ITEM (HISTÓRICO)
+  safeAddEvent('search-add-item', 'input', window.debounce(function() { window.renderListaAdicaoItem(); }, 300));
 
   // BOTÕES DE ATUALIZAÇÃO DE CACHE
   safeAddEvent('btn-cache-contagem', 'click', function() {
@@ -1374,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }).salvarValidade(payload);
   });
 
-  // SALVAR PERMISSÕES DO USUÁRIO (INCLUI ORDEM DE COMPRA E GESTÃO)
+  // SALVAR PERMISSÕES DO USUÁRIO
   safeAddEvent('btn-save-prof-perms', 'click', function() {
     var userId = document.getElementById('prof-user-id').value;
     if (!userId) { window.toast('Usuário não selecionado!', 'er'); return; }
