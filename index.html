@@ -16,7 +16,7 @@
 // ============================================
 // PONTE DE COMUNICAÇÃO GITHUB -> GOOGLE SHEETS
 // ============================================
-const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwtbNQI3kGA3gRcsAj94cpzEYn8LnWk13nBVp7ZUNtT_0m5GW8STBx7IPcZgCB0klRQhA/exec";
+const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwuADTTtljX3bOSwkrdb0NxRc89sQQSDwfhtQowoyBoY0oVtbMrcG2bL3MApiHQFJ8VJA/exec";
 
 if (typeof google === 'undefined' || !google.script || !google.script.run) {
   window.google = window.google || {};
@@ -628,6 +628,7 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="tab-container">
       <button class="tab-btn active" id="tab-btn-nf" onclick="window.alternarAbaNF('nf')">📋 Controle NF</button>
       <button class="tab-btn" id="tab-btn-fat" onclick="window.alternarAbaNF('fat')">🏢 Clientes Faturamento</button>
+      <button class="tab-btn" id="tab-btn-venc-cli" onclick="window.alternarAbaNF('venc-cli')">📅 Vencimento Clientes</button>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -641,6 +642,22 @@ select.input option { background: #0b0d14; color: #fff; }
     <div id="load-nf" class="loading" style="display:none"><div class="spin"></div>Carregando dados da Planilha Externa...</div>
     <div id="view-tab-nf"><div id="lista-nf"></div></div>
     <div id="view-tab-fat" style="display:none"><div id="lista-fat"></div></div>
+    <div id="view-tab-venc-cli" style="display:none">
+      <div class="card">
+        <div class="card-title">FILTRAR PERÍODO DE VENCIMENTO</div>
+        <div class="row">
+          <div style="flex:1">
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">DE:</div>
+            <input class="input" id="venc-cli-dt-de" type="date" onchange="window.renderListaVencClientes()">
+          </div>
+          <div style="flex:1">
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">ATÉ:</div>
+            <input class="input" id="venc-cli-dt-ate" type="date" onchange="window.renderListaVencClientes()">
+          </div>
+        </div>
+      </div>
+      <div id="lista-venc-cliente"></div>
+    </div>
   </div>
 </div>
 
@@ -738,6 +755,21 @@ select.input option { background: #0b0d14; color: #fff; }
     <input class="input" id="qv-qtd" type="number" min="1" value="1">
     <input class="input" id="qv-lote" placeholder="Lote / Observação (Opcional)" style="margin-top:4px">
     <button class="btn-save" id="btn-save-qv" style="margin-top:10px">Confirmar Validade</button>
+  </div>
+</div>
+
+<div class="modal-cam" id="modal-venc-cliente-edit">
+  <div class="modal-cam-content" style="max-width:380px;text-align:left;padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:800;color:#fff;word-break:break-word" id="vc-cliente-nome">Vencimento de Cliente</div>
+      <button class="del" id="btn-close-vc" style="width:32px;height:32px">&#x2715;</button>
+    </div>
+    <input type="hidden" id="vc-cliente-id">
+    <div class="card-title" style="margin-bottom:4px">DATA DE VENCIMENTO</div>
+    <input class="input" id="vc-dt-venc" type="date">
+    <div class="card-title" style="margin-top:8px;margin-bottom:4px">OBSERVAÇÃO / INSTRUÇÃO</div>
+    <input class="input" id="vc-obs" placeholder="Ex: Avisar Marlon antes de enviar, ligar de manhã...">
+    <button class="btn-save" id="btn-save-vc" style="margin-top:10px">Salvar Vencimento</button>
   </div>
 </div>
 
@@ -913,6 +945,7 @@ var adminUsuariosList = [];
 
 var nfDadosList = [];
 var fatDadosObj = { fichario: [], email: [], caixaResponsavel: [], whatsapp: [], entrega: [], avisos: [] };
+var vencClientesList = [];
 var abaNFAtiva = 'nf';
 
 var chartTrendInstance = null;
@@ -1240,7 +1273,7 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('btn-cam-cad-search', 'click', function() { window.abrirScannerAoVivo('search-cad-input', function() { window.renderListaCadastrados(); }); });
   safeAddEvent('btn-cam-val-search', 'click', function() { window.abrirScannerAoVivo('val-search-input', function() { window.popularSelectValidades(); }); });
 
-  // EVENTOS DE BUSCA OTIMIZADOS COM DEBOUNCE (SEM TRAVAR A TELA)
+  // EVENTOS DE BUSCA OTIMIZADOS
   safeAddEvent('search-input', 'input', window.debounce(function(){ limiteExibicao = 50; window.renderContagem(); }, 250));
   safeAddEvent('search-cad-input', 'input', window.debounce(function(){ limiteCadExibicao = 50; window.renderListaCadastrados(); }, 250));
   safeAddEvent('search-add-item', 'input', window.debounce(function(){ window.renderListaAdicaoItem(); }, 250));
@@ -1394,6 +1427,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }).salvarValidade(payload);
   });
 
+  // SALVAR VENCIMENTO DO CLIENTE
+  safeAddEvent('btn-save-vc', 'click', function() {
+    var idCliente = document.getElementById('vc-cliente-id').value;
+    var dtVencRaw = document.getElementById('vc-dt-venc').value;
+    var dtVenc = formatarDataBR(dtVencRaw);
+    var obs = document.getElementById('vc-obs').value;
+
+    if (!dtVenc) { window.toast('Informe a data de vencimento do cliente!', 'er'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    google.script.run.withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.textContent = 'Salvar Vencimento';
+      window.toast(res ? res.mensagem : 'Vencimento salvo!', (res && res.sucesso !== false) ? 'ok' : 'er');
+      if (!res || res.sucesso !== false) {
+        document.getElementById('modal-venc-cliente-edit').style.display = 'none';
+        window.carregarNotasFiscais();
+      }
+    }).withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.textContent = 'Salvar Vencimento';
+      window.toast('Erro ao salvar vencimento.', 'er');
+    }).salvarVencimentoCliente({
+      idCliente: idCliente,
+      dataVenc: dtVenc,
+      observacao: obs,
+      usuario: usuarioLogado ? usuarioLogado.nome : ''
+    });
+  });
+
   // SALVAR PERMISSÕES DO USUÁRIO
   safeAddEvent('btn-save-prof-perms', 'click', function() {
     var userId = document.getElementById('prof-user-id').value;
@@ -1521,6 +1587,7 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('btn-close-relatorio', 'click', function() { document.getElementById('modal-relatorio').style.display = 'none'; });
   safeAddEvent('btn-close-add-item', 'click', function() { document.getElementById('modal-add-item').style.display = 'none'; });
   safeAddEvent('btn-close-qv', 'click', function() { document.getElementById('modal-quick-validade').style.display = 'none'; });
+  safeAddEvent('btn-close-vc', 'click', function() { document.getElementById('modal-venc-cliente-edit').style.display = 'none'; });
   safeAddEvent('btn-close-prof', 'click', function() { document.getElementById('modal-perfil-user').style.display = 'none'; });
   safeAddEvent('btn-close-add-nf-modal', 'click', function() { document.getElementById('modal-add-nf-cliente').style.display = 'none'; });
 
@@ -1831,11 +1898,13 @@ window.exibirModalRelatorio = function(resumo) {
   document.getElementById('modal-relatorio').style.display = 'flex';
 };
 
-// GESTÃO DE NOTAS FISCAIS
+// GESTÃO DE NOTAS FISCAIS & VENCIMENTO CLIENTES
 window.carregarNotasFiscais = function() {
   document.getElementById('load-nf').style.display = 'block';
   document.getElementById('lista-nf').innerHTML = '';
   document.getElementById('lista-fat').innerHTML = '';
+  var listaVencEl = document.getElementById('lista-venc-cliente');
+  if (listaVencEl) listaVencEl.innerHTML = '';
   
   google.script.run
     .withSuccessHandler(function(res) {
@@ -1843,6 +1912,7 @@ window.carregarNotasFiscais = function() {
       if (res && res.sucesso) {
         nfDadosList = res.dadosNF || [];
         fatDadosObj = res.dadosFat || { fichario: [], email: [], caixaResponsavel: [], whatsapp: [], entrega: [], avisos: [] };
+        vencClientesList = res.dadosVencClientes || [];
         window.atualizarFiltrosNF();
         window.renderAbaSelecionadaNF();
       } else {
@@ -1866,6 +1936,11 @@ window.atualizarFiltrosNF = function() {
     html += '<option value="WHATSAPP">💬 WhatsApp</option>';
     html += '<option value="ENTREGA">🚚 Entrega</option>';
     html += '<option value="AVISOS">⚠️ Avisos</option>';
+  } else if (abaNFAtiva === 'venc-cli') {
+    html += '<option value="PENDENTE">🟡 Pendente</option>';
+    html += '<option value="VENCIDO">🔴 Vencido</option>';
+    html += '<option value="QUASE">🟠 Quase Vencendo</option>';
+    html += '<option value="DIAADIA">🟢 Dia a Dia</option>';
   } else {
     html += '<option value="DIA">🔴 Dia</option>';
     html += '<option value="JUNTAR">🟡 Juntar</option>';
@@ -1878,15 +1953,20 @@ window.alternarAbaNF = function(aba) {
   abaNFAtiva = aba;
   document.getElementById('tab-btn-nf').className = 'tab-btn' + (aba === 'nf' ? ' active' : '');
   document.getElementById('tab-btn-fat').className = 'tab-btn' + (aba === 'fat' ? ' active' : '');
+  document.getElementById('tab-btn-venc-cli').className = 'tab-btn' + (aba === 'venc-cli' ? ' active' : '');
+  
   document.getElementById('view-tab-nf').style.display = aba === 'nf' ? 'block' : 'none';
   document.getElementById('view-tab-fat').style.display = aba === 'fat' ? 'block' : 'none';
+  document.getElementById('view-tab-venc-cli').style.display = aba === 'venc-cli' ? 'block' : 'none';
+  
   window.atualizarFiltrosNF();
   window.renderAbaSelecionadaNF();
 };
 
 window.renderAbaSelecionadaNF = function() {
   if (abaNFAtiva === 'nf') window.renderListaNF();
-  else window.renderListaFat();
+  else if (abaNFAtiva === 'fat') window.renderListaFat();
+  else if (abaNFAtiva === 'venc-cli') window.renderListaVencClientes();
 };
 
 window.renderListaNF = function() {
@@ -2001,6 +2081,114 @@ window.renderListaFat = function() {
     html = '<div class="card empty">Nenhum cliente de faturamento encontrado para os filtros selecionados.</div>';
   }
   container.innerHTML = html;
+};
+
+window.renderListaVencClientes = function() {
+  var container = document.getElementById('lista-venc-cliente');
+  if (!container) return;
+  
+  var busca = (document.getElementById('nf-search-input').value || '').toLowerCase().trim();
+  var filtroCat = document.getElementById('nf-filter-cat').value;
+  var dtDe = document.getElementById('venc-cli-dt-de').value;
+  var dtAte = document.getElementById('venc-cli-dt-ate').value;
+  
+  var hoje = new Date();
+  hoje.setHours(0,0,0,0);
+
+  var filtrados = (vencClientesList || []).filter(function(item) {
+    var matchBusca = !busca || 
+      (item.nome || '').toLowerCase().indexOf(busca) > -1 || 
+      (item.observacao || '').toLowerCase().indexOf(busca) > -1;
+    
+    var status = 'PENDENTE';
+    var diffDias = null;
+    if (item.dataVenc) {
+      var parts = item.dataVenc.split('/');
+      if (parts.length === 3) {
+        var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
+        diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
+        if (diffDias < 0) status = 'VENCIDO';
+        else if (diffDias === 0) status = 'DIAADIA';
+        else if (diffDias <= 7) status = 'QUASE';
+        else status = 'PENDENTE';
+      }
+    }
+
+    var matchCat = (filtroCat === 'TODAS') || (status === filtroCat);
+    
+    var matchData = true;
+    if (dtDe && item.dataVenc) {
+      var parts = item.dataVenc.split('/');
+      var d = new Date(parts[2], parts[1] - 1, parts[0]);
+      var dDe = new Date(dtDe.split('-')[0], dtDe.split('-')[1] - 1, dtDe.split('-')[2]);
+      if (d < dDe) matchData = false;
+    }
+    if (dtAte && item.dataVenc && matchData) {
+      var parts = item.dataVenc.split('/');
+      var d = new Date(parts[2], parts[1] - 1, parts[0]);
+      var dAte = new Date(dtAte.split('-')[0], dtAte.split('-')[1] - 1, dtAte.split('-')[2]);
+      if (d > dAte) matchData = false;
+    }
+
+    return matchBusca && matchCat && matchData;
+  });
+
+  if (filtrados.length === 0) {
+    container.innerHTML = '<div class="card empty">Nenhum vencimento de cliente localizado.</div>';
+    return;
+  }
+
+  var html = '';
+  filtrados.forEach(function(item) {
+    var badgeClass = 'b-ok';
+    var statusTxt = 'Dia a Dia / Hoje';
+    
+    if (item.dataVenc) {
+      var parts = item.dataVenc.split('/');
+      var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
+      var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
+      
+      if (diffDias < 0) {
+        badgeClass = 'b-falta';
+        statusTxt = 'VENCIDO (' + Math.abs(diffDias) + ' dias)';
+      } else if (diffDias === 0) {
+        badgeClass = 'b-ok';
+        statusTxt = 'VENCE HOJE';
+      } else if (diffDias <= 7) {
+        badgeClass = 'b-sobra';
+        statusTxt = 'QUASE VENCENDO (' + diffDias + ' dias)';
+      } else {
+        badgeClass = 'b-ok';
+        statusTxt = 'PENDENTE (' + diffDias + ' dias)';
+      }
+    } else {
+      badgeClass = 'b-sobra';
+      statusTxt = 'SEM DATA DEFINIDA';
+    }
+
+    html += '<div class="card" style="margin-bottom:10px;padding:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<span class="badge-status ' + badgeClass + '">' + statusTxt + '</span>' +
+        '<button class="btn-qty" onclick="abrirModalVencCliente(\'' + item.id + '\')" title="Definir Data de Vencimento" style="background:rgba(245,158,11,0.15);color:#fbbf24;border-color:rgba(245,158,11,0.3);width:34px;height:34px;font-size:14px;">📅</button>' +
+      '</div>' +
+      '<div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px;">' + item.nome + '</div>' +
+      '<div style="font-size:12px;color:#cbd5e1;margin-bottom:4px;">Vencimento: <strong>' + (item.dataVenc || 'Não informado') + '</strong></div>' +
+      (item.observacao ? '<div style="font-size:11px;color:#38bdf8;background:rgba(56,189,248,0.08);padding:8px;border-radius:8px;border-left:3px solid #38bdf8;"><strong>Obs:</strong> ' + item.observacao + '</div>' : '') +
+    '</div>';
+  });
+
+  container.innerHTML = html;
+};
+
+window.abrirModalVencCliente = function(id) {
+  var cli = (vencClientesList || []).find(function(c){ return String(c.id) === String(id); });
+  if (!cli) return;
+  
+  document.getElementById('vc-cliente-id').value = cli.id;
+  document.getElementById('vc-cliente-nome').textContent = cli.nome;
+  document.getElementById('vc-dt-venc').value = '';
+  document.getElementById('vc-obs').value = cli.observacao || '';
+  document.getElementById('modal-venc-cliente-edit').style.display = 'flex';
 };
 
 window.alternarFormModalAddNF = function() {
