@@ -474,7 +474,7 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="card">
       <div class="card-title">Pesquisar Produto</div>
       <div class="input-group">
-        <input class="input" id="search-input" placeholder="Buscar por Nome, ID ou Cód. Barras...">
+        <input class="input" id="search-input" placeholder="Buscar por Nome, ID ou Cód. Barras..." oninput="window.renderContagem()">
         <button class="btn-cam" id="btn-cam-search" title="Escanear com Câmera">
           <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
@@ -523,7 +523,7 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="card">
       <div class="card-title">Produtos cadastrados</div>
       <div class="input-group" style="margin-bottom:12px">
-        <input class="input" id="search-cad-input" placeholder="Pesquisar por Nome, ID ou Cód. Barras...">
+        <input class="input" id="search-cad-input" placeholder="Pesquisar por Nome, ID ou Cód. Barras..." oninput="window.renderListaCadastrados()">
         <button class="btn-cam" id="btn-cam-cad-search" title="Escanear para Pesquisar">
           <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
@@ -590,7 +590,7 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="card">
       <div class="card-title">REGISTRAR VENCIMENTO DE PRODUTO</div>
       <div class="input-group" style="margin-bottom:8px">
-        <input class="input" id="val-search-input" placeholder="Buscar por Nome, ID ou Cód...">
+        <input class="input" id="val-search-input" placeholder="Buscar por Nome, ID ou Cód..." oninput="window.popularSelectValidades()">
         <button class="btn-cam" id="btn-cam-val-search" title="Escanear com Câmera">
           <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
@@ -634,7 +634,7 @@ select.input option { background: #0b0d14; color: #fff; }
         <div class="card-title" style="margin-bottom:0">PESQUISAR PRODUTOR / CLIENTE</div>
         <button class="btn" id="btn-open-add-nf-modal" style="padding:6px 12px;font-size:11px;border-radius:8px;background:linear-gradient(135deg,#10b981,#059669)">➕ Novo Cadastro</button>
       </div>
-      <input class="input" id="nf-search-input" placeholder="Digite para buscar...">
+      <input class="input" id="nf-search-input" placeholder="Digite para buscar..." oninput="window.renderAbaSelecionadaNF()">
       <div class="card-title" style="margin-top:10px;margin-bottom:4px">CATEGORIA / FILTRO</div>
       <select class="input" id="nf-filter-cat" style="margin-bottom:0"><option value="TODAS">Todas as Categorias</option></select>
     </div>
@@ -719,7 +719,7 @@ select.input option { background: #0b0d14; color: #fff; }
       <button class="del" id="btn-close-add-item" style="width:36px;height:36px">&#x2715;</button>
     </div>
     <div class="input-group" style="margin-bottom:12px;flex-shrink:0">
-      <input class="input" id="search-add-item" placeholder="Buscar por Nome, ID ou Cód...">
+      <input class="input" id="search-add-item" placeholder="Buscar por Nome, ID ou Cód..." oninput="window.renderListaAdicaoItem()" onkeyup="window.renderListaAdicaoItem()">
     </div>
     <div id="lista-add-item" style="flex:1;overflow-y:auto;border-top:1px solid rgba(255,255,255,0.08);padding-top:12px"></div>
   </div>
@@ -1240,9 +1240,6 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('cartaz-prod-name', 'input', window.atualizarPreviewCartaz);
   safeAddEvent('cartaz-prod-price', 'input', window.atualizarPreviewCartaz);
 
-  // PESQUISA NO MODAL ADICIONAR ITEM (HISTÓRICO)
-  safeAddEvent('search-add-item', 'input', window.debounce(function() { window.renderListaAdicaoItem(); }, 300));
-
   // BOTÕES DE ATUALIZAÇÃO DE CACHE
   safeAddEvent('btn-cache-contagem', 'click', function() {
     var btn = this; btn.disabled = true; btn.textContent = '🔄 Atualizando...';
@@ -1483,7 +1480,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('drawer-tools').style.display = 'none'; window.toast('Sessão encerrada.', 'ok'); window.nav('login');
   });
 
-  safeAddEvent('search-input', 'input', function(){ limiteExibicao = 50; window.renderContagem(); });
   safeAddEvent('filter-cat', 'change', function(){ limiteExibicao = 50; window.renderContagem(); });
 
   safeAddEvent('btn-save-cont', 'click', function() {
@@ -2038,11 +2034,31 @@ window.abrirModalAdicaoItem = function(index) {
 
 window.renderListaAdicaoItem = function() {
   var container = document.getElementById('lista-add-item');
-  var busca = (document.getElementById('search-add-item').value || '').toLowerCase().trim();
-  var filtrados = produtosContagem.filter(function(p) { return !busca || (p.nome || '').toLowerCase().indexOf(busca) > -1 || (p.id || '').toString().toLowerCase().indexOf(busca) > -1 || (p.codBarra || '').toString().toLowerCase().indexOf(busca) > -1; });
-  if (filtrados.length === 0) { container.innerHTML = '<div class="empty">Nenhum produto encontrado.</div>'; return; }
+  if (!container) return;
+  var inputEl = document.getElementById('search-add-item');
+  var busca = (inputEl ? inputEl.value : '').toLowerCase().trim();
+
+  if (!produtosContagem || produtosContagem.length === 0) {
+    container.innerHTML = '<div class="empty">Nenhum produto no Cache.</div>';
+    return;
+  }
+
+  var filtrados = produtosContagem.filter(function(p) {
+    if (!p) return false;
+    if (!busca) return true;
+    var pNome = String(p.nome || '').toLowerCase();
+    var pId = String(p.id || '').toLowerCase();
+    var pCod = String(p.codBarra || '').toLowerCase();
+    return pNome.indexOf(busca) > -1 || pId.indexOf(busca) > -1 || pCod.indexOf(busca) > -1;
+  });
+
+  if (filtrados.length === 0) {
+    container.innerHTML = '<div class="empty">Nenhum produto encontrado.</div>';
+    return;
+  }
+
   var html = '';
-  filtrados.slice(0, 30).forEach(function(p) {
+  filtrados.slice(0, 40).forEach(function(p) {
     var imgHtml = (p.fotoUrl && p.fotoUrl !== 'NOT_FOUND') ? '<img src="' + p.fotoUrl + '" alt="foto">' : '📦';
     var thumbDiv = '<div class="prod-thumb" style="width:36px;height:36px;font-size:16px">' + imgHtml + '</div>';
     html += '<div class="prod-item" style="padding:8px 0">' + thumbDiv + '<div class="prod-info"><div class="prod-name" style="font-size:12px">' + p.nome + '</div><div class="prod-meta">ID: ' + p.id + ' | Ideal: ' + p.estoqueIdeal + '</div></div><div class="prod-counter" style="gap:4px"><input class="qty-input" id="add-qty-' + p.id + '" type="number" min="0" style="width:40px;height:32px;font-size:12px" placeholder="Qtd"><button class="btn-save" onclick="salvarItemAdicional(\'' + p.id + '\')" style="width:auto;height:32px;padding:0 12px;margin:0;font-size:12px;border-radius:8px">OK</button></div></div>';
