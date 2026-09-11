@@ -668,7 +668,7 @@ select.input option { background: #0b0d14; color: #fff; }
         </div>
         <div>
         <div>
-          
+        <div>
           <div class="card-title" style="margin-bottom:4px">PERÍODO (DE / ATÉ)</div>
           <div style="display:flex;gap:6px;align-items:center;">
             <input class="input" id="venc-cli-dt-de" type="date" title="De (Data Inicial)" style="font-size:11px;padding:8px;margin-bottom:0;">
@@ -676,7 +676,6 @@ select.input option { background: #0b0d14; color: #fff; }
             <input class="input" id="venc-cli-dt-ate" type="date" title="Até (Data Final)" style="font-size:11px;padding:8px;margin-bottom:0;">
           </div>
         </div>
-    
     <div id="load-venc-cli" class="loading" style="display:none"><div class="spin"></div>Carregando clientes do relatório...</div>
     <div id="lista-venc-cliente"></div>
   </div>
@@ -1565,8 +1564,7 @@ window.renderListaVencClientes = function() {
     var matchCat = (filtroCat === 'TODAS') || (status === filtroCat);
     
     var matchData = true;
-    var cStart = null;
-    var cEnd = null;
+    var cStart = null, cEnd = null;
     
     if (item.dataVenc) {
       var p1 = item.dataVenc.split('/');
@@ -1667,7 +1665,6 @@ window.renderListaVencClientes = function() {
     });
   }
 };
-
   // SALVAR PERMISSÕES DO USUÁRIO
   safeAddEvent('btn-save-prof-perms', 'click', function() {
     var userId = document.getElementById('prof-user-id').value;
