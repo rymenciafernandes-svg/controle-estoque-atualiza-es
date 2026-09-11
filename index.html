@@ -1246,7 +1246,21 @@ window.executarSolicitacao = function() {
     .solicitarAcesso({ nome: nome, funcao: funcao, local: local, telefone: telefone });
 };
 document.addEventListener('DOMContentLoaded', function() {
+  
+// ABRIR E FECHAR O MENU LATERAL
+  safeAddEvent('btn-open-tools', 'click', function() {
+    document.getElementById('drawer-tools').style.display = 'flex';
+  });
 
+  safeAddEvent('btn-close-tools', 'click', function() {
+    document.getElementById('drawer-tools').style.display = 'none';
+  });
+
+  safeAddEvent('drawer-tools', 'click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+  });
+  
+  // Navegação dos botões
   document.querySelectorAll('[data-nav]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var target = this.getAttribute('data-nav');
@@ -1255,7 +1269,7 @@ document.addEventListener('DOMContentLoaded', function() {
       window.nav(target);
     });
   });
-
+  
   safeAddEvent('file-cam-input', 'change', async function(e) {
     if (!e.target.files || e.target.files.length === 0) return;
     var imageFile = e.target.files[0];
