@@ -33,6 +33,7 @@ if (typeof google === 'undefined' || !google.script || !google.script.run) {
 
       return new Proxy(runner, {
         get: function(target, prop) {
+          if (prop in target) return target[prop];
           return function() {
             var args = Array.prototype.slice.call(arguments);
             var successCb = target._success;
@@ -367,8 +368,9 @@ select.input option { background: #0b0d14; color: #fff; }
       <button class="btn-more" id="btn-go-solicitar" onclick="window.nav('solicitar')" style="margin-top:0">Solicitar Cadastro de Acesso</button>
     </div>
   </div>
-  
-  <!-- TELA SOLICITAÇÃO -->
+</div>
+
+<!-- TELA SOLICITAÇÃO -->
 <div id="p-solicitar" class="page">
   <div class="page-header">
     <button class="back" id="btn-back-to-login" onclick="window.nav('login')">
@@ -665,6 +667,7 @@ select.input option { background: #0b0d14; color: #fff; }
           </select>
         </div>
         <div>
+        <div>
           <div class="card-title" style="margin-bottom:4px">PERÍODO (DE / ATÉ)</div>
           <div style="display:flex;gap:6px;align-items:center;">
             <input class="input" id="venc-cli-dt-de" type="date" title="De (Data Inicial)" style="font-size:11px;padding:8px;margin-bottom:0;">
@@ -672,9 +675,13 @@ select.input option { background: #0b0d14; color: #fff; }
             <input class="input" id="venc-cli-dt-ate" type="date" title="Até (Data Final)" style="font-size:11px;padding:8px;margin-bottom:0;">
           </div>
         </div>
-      </div>
-    </div>
-    <!-- TELAS EXCLUSIVAS DE ADM -->
+    
+    <div id="load-venc-cli" class="loading" style="display:none"><div class="spin"></div>Carregando clientes do relatório...</div>
+    <div id="lista-venc-cliente"></div>
+  </div>
+</div>
+
+<!-- TELAS EXCLUSIVAS DE ADM -->
 <div id="p-admin-users" class="page">
   <div class="page-header"><button class="back" data-nav="home">Voltar</button><div class="page-title">Gestão de Usuários</div></div>
   <div class="page-body"><div id="load-users" class="loading"><div class="spin"></div>Buscando usuários...</div><div id="admin-user-list"></div></div>
@@ -770,8 +777,8 @@ select.input option { background: #0b0d14; color: #fff; }
     <button class="btn-save" id="btn-save-qv" style="margin-top:10px">Confirmar Validade</button>
   </div>
 </div>
-
-<div class="modal-cam" id="modal-venc-cliente-edit">
+  
+  <div class="modal-cam" id="modal-venc-cliente-edit">
   <div class="modal-cam-content" style="max-width:400px;text-align:left;padding:20px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div style="font-size:15px;font-weight:800;color:#fff;word-break:break-word" id="vc-cliente-nome">Vencimento de Cliente</div>
@@ -993,12 +1000,6 @@ function formatarDataBR(dataIso) {
   return dataIso;
 }
 
-function dateBRtoIso(dt) {
-  if (!dt) return '';
-  var p = dt.split('/');
-  return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : dt;
-}
-
 function norm(val) {
   return String(val || '').trim().toLowerCase().replace(/^0+/, '');
 }
@@ -1187,7 +1188,7 @@ window.executarLogin = function() {
   var timerTrava = setTimeout(function() {
     if (btn) { btn.disabled = false; btn.textContent = 'ENTRAR'; }
     window.toast('Servidor demorou a responder. Tente novamente.', 'er');
-  }, 31000);
+  }, 30000);
 
   google.script.run
     .withSuccessHandler(function(res){
@@ -1246,23 +1247,8 @@ window.executarSolicitacao = function() {
     })
     .solicitarAcesso({ nome: nome, funcao: funcao, local: local, telefone: telefone });
 };
-
 document.addEventListener('DOMContentLoaded', function() {
 
-  // ABRIR E FECHAR O MENU LATERAL (DRAWER)
-  safeAddEvent('btn-open-tools', 'click', function() {
-    document.getElementById('drawer-tools').style.display = 'flex';
-  });
-
-  safeAddEvent('btn-close-tools', 'click', function() {
-    document.getElementById('drawer-tools').style.display = 'none';
-  });
-
-  safeAddEvent('drawer-tools', 'click', function(e) {
-    if (e.target === this) this.style.display = 'none';
-  });
-
-  // Navegação geral por botões
   document.querySelectorAll('[data-nav]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var target = this.getAttribute('data-nav');
@@ -1491,41 +1477,195 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // SALVAR VENCIMENTO DO CLIENTE
-  safeAddEvent('btn-save-vc', 'click', function() {
-    var idCliente = document.getElementById('vc-cliente-id').value;
-    var dtVencRaw = document.getElementById('vc-dt-venc').value;
-    var dtVencAteRaw = document.getElementById('vc-dt-venc-ate').value;
-    var dtVenc = formatarDataBR(dtVencRaw);
-    var dtVencAte = formatarDataBR(dtVencAteRaw);
-    var obs = document.getElementById('vc-obs').value;
+function dateBRtoIso(dt) {
+  if (!dt) return '';
+  var p = dt.split('/');
+  return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : dt;
+}
 
-    if (!dtVenc && !dtVencAte) { window.toast('Informe ao menos uma data de vencimento!', 'er'); return; }
+window.abrirModalVencCliente = function(id) {
+  var cli = (vencClientesList || []).find(function(c){ return String(c.id) === String(id); });
+  if (!cli) return;
+  
+  document.getElementById('vc-cliente-id').value = cli.id;
+  document.getElementById('vc-cliente-nome').textContent = cli.nome;
+  document.getElementById('vc-dt-venc').value = dateBRtoIso(cli.dataVenc);
+  document.getElementById('vc-dt-venc-ate').value = dateBRtoIso(cli.dataVencAte);
+  document.getElementById('vc-obs').value = cli.observacao || '';
+  document.getElementById('modal-venc-cliente-edit').style.display = 'flex';
+};
 
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = 'Salvando...';
+safeAddEvent('btn-save-vc', 'click', function() {
+  var idCliente = document.getElementById('vc-cliente-id').value;
+  var dtVencRaw = document.getElementById('vc-dt-venc').value;
+  var dtVencAteRaw = document.getElementById('vc-dt-venc-ate').value;
+  var dtVenc = formatarDataBR(dtVencRaw);
+  var dtVencAte = formatarDataBR(dtVencAteRaw);
+  var obs = document.getElementById('vc-obs').value;
 
-    google.script.run.withSuccessHandler(function(res) {
-      btn.disabled = false;
-      btn.textContent = 'Salvar Vencimento';
-      window.toast(res ? res.mensagem : 'Vencimento salvo!', (res && res.sucesso !== false) ? 'ok' : 'er');
-      if (!res || res.sucesso !== false) {
-        document.getElementById('modal-venc-cliente-edit').style.display = 'none';
-        window.carregarVencimentosClientesPage();
+  if (!dtVenc && !dtVencAte) { window.toast('Informe ao menos uma data de vencimento!', 'er'); return; }
+
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  google.script.run.withSuccessHandler(function(res) {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Vencimento';
+    window.toast(res ? res.mensagem : 'Vencimento salvo!', (res && res.sucesso !== false) ? 'ok' : 'er');
+    if (!res || res.sucesso !== false) {
+      document.getElementById('modal-venc-cliente-edit').style.display = 'none';
+      window.carregarVencimentosClientesPage();
+    }
+  }).withFailureHandler(function(err) {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Vencimento';
+    window.toast('Erro ao salvar vencimento.', 'er');
+  }).salvarVencimentoCliente({
+    idCliente: idCliente,
+    dataVenc: dtVenc,
+    dataVencAte: dtVencAte,
+    observacao: obs,
+    usuario: usuarioLogado ? usuarioLogado.nome : ''
+  });
+});
+
+window.renderListaVencClientes = function() {
+  var container = document.getElementById('lista-venc-cliente');
+  if (!container) return;
+  
+  var busca = (document.getElementById('venc-cli-search').value || '').toLowerCase().trim();
+  var filtroCat = document.getElementById('venc-cli-filter-cat').value;
+  var dtDe = document.getElementById('venc-cli-dt-de').value;
+  var dtAte = document.getElementById('venc-cli-dt-ate').value;
+  
+  var hoje = new Date();
+  hoje.setHours(0,0,0,0);
+
+  var filtrados = (vencClientesList || []).filter(function(item) {
+    var matchBusca = !busca || 
+      (item.nome || '').toLowerCase().indexOf(busca) > -1 || 
+      (item.observacao || '').toLowerCase().indexOf(busca) > -1;
+    
+    var status = 'PENDENTE';
+    var dtRefStr = item.dataVencAte || item.dataVenc;
+    if (dtRefStr) {
+      var parts = dtRefStr.split('/');
+      if (parts.length === 3) {
+        var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
+        var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
+        if (diffDias < 0) status = 'VENCIDO';
+        else if (diffDias === 0) status = 'DIAADIA';
+        else if (diffDias <= 7) status = 'QUASE';
+        else status = 'PENDENTE';
       }
-    }).withFailureHandler(function(err) {
-      btn.disabled = false;
-      btn.textContent = 'Salvar Vencimento';
-      window.toast('Erro ao salvar vencimento.', 'er');
-    }).salvarVencimentoCliente({
-      idCliente: idCliente,
-      dataVenc: dtVenc,
-      dataVencAte: dtVencAte,
-      observacao: obs,
-      usuario: usuarioLogado ? usuarioLogado.nome : ''
-    });
+    }
+
+    var matchCat = (filtroCat === 'TODAS') || (status === filtroCat);
+    
+    var matchData = true;
+    var cStart = null;
+    var cEnd = null;
+    
+    if (item.dataVenc) {
+      var p1 = item.dataVenc.split('/');
+      if (p1.length === 3) cStart = new Date(p1[2], p1[1] - 1, p1[0]);
+    }
+    if (item.dataVencAte) {
+      var p2 = item.dataVencAte.split('/');
+      if (p2.length === 3) cEnd = new Date(p2[2], p2[1] - 1, p2[0]);
+    }
+    
+    if (!cStart) cStart = cEnd;
+    if (!cEnd) cEnd = cStart;
+
+    if (cStart && cEnd) {
+      if (dtDe) {
+        var pDe = dtDe.split('-');
+        var fStart = new Date(pDe[0], pDe[1] - 1, pDe[2]);
+        if (cEnd < fStart) matchData = false;
+      }
+      if (dtAte && matchData) {
+        var pAte = dtAte.split('-');
+        var fEnd = new Date(pAte[0], pAte[1] - 1, pAte[2]);
+        if (cStart > fEnd) matchData = false;
+      }
+    } else if (dtDe || dtAte) {
+      matchData = false;
+    }
+
+    return matchBusca && matchCat && matchData;
   });
 
+  if (filtrados.length === 0) {
+    container.innerHTML = '<div class="card empty">Nenhum vencimento de cliente localizado.</div>';
+    return;
+  }
+
+  var exibidos = filtrados.slice(0, limiteVencCliExibicao);
+  var html = '';
+  exibidos.forEach(function(item) {
+    var badgeClass = 'b-ok';
+    var statusTxt = 'Dia a Dia / Hoje';
+    var dtRefStr = item.dataVencAte || item.dataVenc;
+    
+    if (dtRefStr) {
+      var parts = dtRefStr.split('/');
+      var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
+      var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
+      
+      if (diffDias < 0) {
+        badgeClass = 'b-falta';
+        statusTxt = 'VENCIDO (' + Math.abs(diffDias) + ' dias)';
+      } else if (diffDias === 0) {
+        badgeClass = 'b-ok';
+        statusTxt = 'VENCE HOJE';
+      } else if (diffDias <= 7) {
+        badgeClass = 'b-sobra';
+        statusTxt = 'QUASE VENCENDO (' + diffDias + ' dias)';
+      } else {
+        badgeClass = 'b-ok';
+        statusTxt = 'PENDENTE (' + diffDias + ' dias)';
+      }
+    } else {
+      badgeClass = 'b-sobra';
+      statusTxt = 'SEM DATA DEFINIDA';
+    }
+
+    var strVenc = 'Não informado';
+    if (item.dataVenc && item.dataVencAte) {
+      strVenc = item.dataVenc + ' <span style="color:#fbbf24;font-weight:800;">até</span> ' + item.dataVencAte;
+    } else if (item.dataVenc) {
+      strVenc = item.dataVenc;
+    } else if (item.dataVencAte) {
+      strVenc = 'Até ' + item.dataVencAte;
+    }
+
+    html += '<div class="card" style="margin-bottom:10px;padding:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<span class="badge-status ' + badgeClass + '">' + statusTxt + '</span>' +
+        '<button class="btn-qty" onclick="abrirModalVencCliente(\'' + item.id + '\')" title="Definir Data de Vencimento" style="background:rgba(245,158,11,0.15);color:#fbbf24;border-color:rgba(245,158,11,0.3);width:34px;height:34px;font-size:14px;">📅</button>' +
+      '</div>' +
+      '<div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px;">' + item.nome + '</div>' +
+      '<div style="font-size:12px;color:#cbd5e1;margin-bottom:4px;">Vencimento: <strong>' + strVenc + '</strong></div>' +
+      (item.observacao ? '<div style="font-size:11px;color:#38bdf8;background:rgba(56,189,248,0.08);padding:8px;border-radius:8px;border-left:3px solid #38bdf8;"><strong>Obs:</strong> ' + item.observacao + '</div>' : '') +
+    '</div>';
+  });
+
+  if (filtrados.length > limiteVencCliExibicao) {
+    html += '<button class="btn-more" id="btn-load-more-venc-cli">Carregar Mais (' + (filtrados.length - limiteVencCliExibicao) + ' restantes)</button>';
+  }
+
+  container.innerHTML = html;
+
+  var btnLoadMore = document.getElementById('btn-load-more-venc-cli');
+  if (btnLoadMore) {
+    btnLoadMore.addEventListener('click', function() {
+      limiteVencCliExibicao += 50;
+      window.renderListaVencClientes();
+    });
+  }
+};
   // SALVAR PERMISSÕES DO USUÁRIO
   safeAddEvent('btn-save-prof-perms', 'click', function() {
     var userId = document.getElementById('prof-user-id').value;
@@ -1565,7 +1705,56 @@ document.addEventListener('DOMContentLoaded', function() {
       .salvarPermissoesUsuario(userId, perms, usuarioLogado ? usuarioLogado.usuario : '');
   });
 
+  // IMPRESSÃO DE RELATÓRIO
+  safeAddEvent('btn-print-relatorio', 'click', function() {
+    var modalContent = document.querySelector('#modal-relatorio .modal-cam-content');
+    if (!modalContent) return;
+    
+    var conteudo = modalContent.innerHTML;
+    var janela = window.open('', '_blank');
+    if (!janela) {
+      window.toast('Permita pop-ups no navegador para imprimir.', 'er');
+      return;
+    }
+    
+    janela.document.write('<html><head><title>Relatório de Contagem</title>');
+    janela.document.write('<style>');
+    janela.document.write('body { font-family: sans-serif; padding: 20px; color: #000; background: #fff; }');
+    janela.document.write('.rel-stats { display: flex; gap: 10px; margin: 20px 0; }');
+    janela.document.write('.rel-stat-card { border: 1px solid #ccc; padding: 10px; text-align: center; flex: 1; border-radius: 8px;}');
+    janela.document.write('table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; text-align: left; }');
+    janela.document.write('th { border-bottom: 2px solid #000; padding: 8px; }');
+    janela.document.write('td { border-bottom: 1px solid #ddd; padding: 8px; }');
+    janela.document.write('.no-print { display: none !important; }');
+    janela.document.write('.badge-status { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; }');
+    janela.document.write('.b-ok { background: #d1fae5; color: #059669; }');
+    janela.document.write('.b-falta { background: #fee2e2; color: #dc2626; }');
+    janela.document.write('.b-sobra { background: #fef3c7; color: #d97706; }');
+    janela.document.write('@media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }');
+    janela.document.write('</style></head><body>');
+    janela.document.write(conteudo);
+    
+    janela.document.write('<div style="margin-top: 45px; font-size: 12px; font-weight: bold;">');
+    janela.document.write('  <div style="display:flex; justify-content:space-between; margin-bottom: 25px;">');
+    janela.document.write('    <span style="flex:1;">Responsável pelo Turno Atual......: _____________________________________</span>');
+    janela.document.write('    <span style="width: 220px; text-align:right;">Visto: ___________________</span>');
+    janela.document.write('  </div>');
+    janela.document.write('  <div style="display:flex; justify-content:space-between;">');
+    janela.document.write('    <span style="flex:1;">Responsável pelo Turno Seguinte: _____________________________________</span>');
+    janela.document.write('    <span style="width: 220px; text-align:right;">Visto: ___________________</span>');
+    janela.document.write('  </div>');
+    janela.document.write('</div>');
+
+    janela.document.write('</body></html>');
+    janela.document.close();
+    janela.focus();
+    setTimeout(function() { janela.print(); janela.close(); }, 350);
+  });
+
   // OUTROS BINDINGS
+  safeAddEvent('btn-open-tools', 'click', function(){ document.getElementById('drawer-tools').style.display = 'flex'; });
+  safeAddEvent('btn-close-tools', 'click', function(){ document.getElementById('drawer-tools').style.display = 'none'; });
+  safeAddEvent('drawer-tools', 'click', function(e){ if(e.target === this) this.style.display = 'none'; });
   safeAddEvent('btn-toggle-adm', 'click', function() {
     var submenu = document.getElementById('adm-submenu'); var chevron = this.querySelector('.chevron');
     if (submenu.style.display === 'flex') { submenu.style.display = 'none'; chevron.style.transform = 'rotate(0deg)'; } 
@@ -1607,9 +1796,113 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('btn-close-prof', 'click', function() { document.getElementById('modal-perfil-user').style.display = 'none'; });
   safeAddEvent('btn-close-add-nf-modal', 'click', function() { document.getElementById('modal-add-nf-cliente').style.display = 'none'; });
 
+  safeAddEvent('btn-sync-fotos', 'click', function() {
+    var btn = this; btn.textContent = '⏳ Sincronizando...'; window.toast('Buscando fotos na internet...', 'ok');
+    google.script.run.withSuccessHandler(function(res){
+      btn.textContent = '🖼️ Sincronizar Fotos Web';
+      if(res && res.sucesso) {
+        if (res.processados > 0) { 
+          window.toast('Fotos atualizadas!', 'ok'); 
+          if(document.getElementById('p-contagem').classList.contains('active')) window.carregarContagem(); 
+          if(document.getElementById('p-cadastrar').classList.contains('active')) window.carregarProdutos(); 
+        } else { window.toast('Todas as fotos já estão sincronizadas!', 'ok'); }
+      } else { window.toast(res ? res.mensagem : 'Erro na sincronização', 'er'); }
+    }).withFailureHandler(function(err){
+      btn.textContent = '🖼️ Sincronizar Fotos Web';
+      window.toast('Erro na comunicação.', 'er');
+    }).sincronizarFotosEmLote();
+  });
+
+  safeAddEvent('btn-print-cartaz', 'click', function() {
+    var nome = document.getElementById('prev-prod-title').textContent;
+    var intPart = document.getElementById('prev-price-int').textContent;
+    var decPart = document.getElementById('prev-price-dec').textContent;
+    var janela = window.open('', '_blank');
+    if (!janela) { window.toast('Desative o bloqueador de popups para imprimir.', 'er'); return; }
+    janela.document.write('<html><head><title>Cartaz Promocional - ' + nome + '</title>');
+    janela.document.write('<style>');
+    janela.document.write('@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&family=Oswald:wght@700&display=swap");');
+    janela.document.write('* { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }');
+    janela.document.write('body { background:#fff; display:flex; align-items:center; justify-content:center; min-height:100vh; padding:0; }');
+    janela.document.write('.poster-page { width:210mm; height:297mm; background:#fff; border:none; display:flex; flex-direction:column; overflow:hidden; position:relative; page-break-after:always; }');
+    janela.document.write('.poster-header-banner { background:#d1d5db !important; padding:60px 20px 85px; text-align:center; clip-path: polygon(0 0, 100% 0, 100% 75%, 50% 100%, 0 75%); -webkit-clip-path: polygon(0 0, 100% 0, 100% 75%, 50% 100%, 0 75%); }');
+    janela.document.write('.poster-header-title { font-size:78px; font-weight:900; letter-spacing:1px; color:#000; text-transform:uppercase; font-family:"Montserrat", sans-serif; text-shadow:0 3px 6px rgba(0,0,0,0.15); }');
+    janela.document.write('.poster-body-content { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:space-around; padding:40px 20px; text-align:center; }');
+    janela.document.write('.poster-prod-title { font-size:54px; font-weight:700; color:#000; text-transform:uppercase; line-height:1.15; word-break:break-word; max-width:92%; font-family:"Oswald", sans-serif; letter-spacing:0.5px; }');
+    janela.document.write('.poster-price-container { display:flex; align-items:baseline; justify-content:center; font-weight:900; color:#000; font-family:"Montserrat", sans-serif; margin-bottom:20px; }');
+    janela.document.write('.poster-price-symbol { font-size:70px; margin-right:8px; font-weight:900; }');
+    janela.document.write('.poster-price-big { font-size:270px; line-height:0.8; font-weight:900; letter-spacing:-6px; }');
+    janela.document.write('.poster-price-cents { font-size:105px; font-weight:900; margin-left:4px; }');
+    janela.document.write('@media print { @page { size: A4; margin: 0; } body { padding:0; margin:0; } .poster-page { width:100vw; height:100vh; } }');
+    janela.document.write('</style></head><body>');
+    janela.document.write('<div class="poster-page">');
+    janela.document.write('  <div class="poster-header-banner"><div class="poster-header-title">PROMOÇÃO</div></div>');
+    janela.document.write('  <div class="poster-body-content">');
+    janela.document.write('    <div class="poster-prod-title">' + nome + '</div>');
+    janela.document.write('    <div class="poster-price-container">');
+    janela.document.write('      <span class="poster-price-symbol">R$</span>');
+    janela.document.write('      <span class="poster-price-big">' + intPart + '</span>');
+    janela.document.write('      <span class="poster-price-cents">' + decPart + '</span>');
+    janela.document.write('    </div>');
+    janela.document.write('  </div>');
+    janela.document.write('</div>');
+    janela.document.write('</body></html>');
+    janela.document.close();
+    janela.focus();
+    setTimeout(function() { janela.print(); janela.close(); }, 350);
+  });
+
+  safeAddEvent('btn-open-add-nf-modal', 'click', function() {
+    document.getElementById('modal-add-nf-cliente').style.display = 'flex';
+    document.getElementById('add-nf-tipo').value = abaNFAtiva === 'fat' ? 'FAT' : 'NF';
+    window.alternarFormModalAddNF();
+  });
+
+  safeAddEvent('add-nf-tipo', 'change', function() { window.alternarFormModalAddNF(); });
+  safeAddEvent('add-fat-cat', 'change', function() {
+    document.getElementById('group-fat-resp').style.display = this.value === 'CAIXA' ? 'block' : 'none';
+  });
+
+  safeAddEvent('btn-save-novo-cliente-nf', 'click', function() {
+    var tipo = document.getElementById('add-nf-tipo').value;
+    var payload = { tipo: tipo };
+    if (tipo === 'NF') {
+      payload.cliente = document.getElementById('add-nf-nome').value.trim();
+      payload.frequencia = document.getElementById('add-nf-freq').value;
+      payload.canal = document.getElementById('add-nf-canal').value;
+      payload.contato = document.getElementById('add-nf-contato').value.trim();
+      if (!payload.cliente) { window.toast('Informe o nome do Produtor/Cliente!', 'er'); return; }
+    } else {
+      payload.categoria = document.getElementById('add-fat-cat').value;
+      payload.cliente = document.getElementById('add-fat-nome').value.trim();
+      payload.responsavel = document.getElementById('add-fat-resp').value.trim();
+      if (!payload.cliente) { window.toast('Informe o nome do Cliente ou Aviso!', 'er'); return; }
+    }
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Salvando na Planilha Externa...';
+    google.script.run.withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.textContent = 'Salvar na Planilha Externa';
+      if (res && res.sucesso) {
+        window.toast(res.mensagem, 'ok');
+        document.getElementById('modal-add-nf-cliente').style.display = 'none';
+        document.getElementById('add-nf-nome').value = '';
+        document.getElementById('add-nf-contato').value = '';
+        document.getElementById('add-fat-nome').value = '';
+        document.getElementById('add-fat-resp').value = '';
+        window.carregarNotasFiscais();
+      } else { window.toast(res ? res.mensagem : 'Erro ao salvar', 'er'); }
+    }).withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.textContent = 'Salvar na Planilha Externa';
+      window.toast('Erro ao salvar na planilha.', 'er');
+    }).salvarClienteExterno(payload);
+  });
+
 });
 
-// FUNCTIONS CONTAGEM E CADASTRO
+// FUNCTIONS CONTAGEM, CADASTRO, ADM E BI
 window.carregarContagem = function() {
   var loadEl = document.getElementById('load-contagem');
   if (loadEl) loadEl.style.display = 'block';
@@ -1633,7 +1926,14 @@ window.carregarContagem = function() {
           window.atualizarMapaValidades();
           window.renderContagem();
         })
+        .withFailureHandler(function(err) {
+          console.warn("Falha ao carregar validades em segundo plano:", err);
+        })
         .getValidades();
+    })
+    .withFailureHandler(function(err) {
+      if (loadEl) loadEl.style.display = 'none';
+      window.toast('Erro ao carregar produtos do servidor.', 'er');
     })
     .getProdutos();
 };
@@ -1721,735 +2021,149 @@ window.renderContagem = function() {
   if (btnLoadMore) btnLoadMore.addEventListener('click', function() { limiteExibicao += 50; window.renderContagem(); });
   window.verificarBotaoSalvar();
 };
-window.abrirModalValidadeDireta = function(id) {
-  var p = produtosContagem.find(function(item){ return String(item.id) === String(id); });
-  if (!p) return;
-  document.getElementById('qv-prod-id').value = p.id;
-  document.getElementById('qv-prod-nome').textContent = p.nome;
-  document.getElementById('qv-dt-venc').value = '';
-  document.getElementById('qv-qtd').value = 1;
-  document.getElementById('qv-lote').value = '';
-  document.getElementById('modal-quick-validade').style.display = 'flex';
+
+window.atualizarMetaItem = function(id) {
+  var prod = produtosContagem.find(function(item) { return String(item.id) === String(id); });
+  if (prod) {
+    var metaEl = document.getElementById('meta-' + id);
+    if (metaEl) { var qtd = contagensAtuais[id] !== undefined ? contagensAtuais[id] : 0; metaEl.innerHTML = window.gerarMetaHtml(prod, qtd); }
+  }
 };
 
 window.alterarQtd = function(id, delta) {
-  var q = contagensAtuais[id] !== undefined ? contagensAtuais[id] : 0;
-  q = Math.max(0, q + delta);
-  window.definirQtd(id, q);
+  var atual = contagensAtuais[id] || 0; var nova = Math.max(0, atual + delta);
+  if (nova > 0) contagensAtuais[id] = nova; else delete contagensAtuais[id];
+  var inputEl = document.getElementById('qty-' + id);
+  if (inputEl) inputEl.value = nova;
+  window.atualizarMetaItem(id); window.verificarBotaoSalvar();
 };
 
 window.definirQtd = function(id, val) {
-  var q = Math.max(0, parseInt(val) || 0);
-  contagensAtuais[id] = q;
-  var input = document.getElementById('qty-' + id);
-  if (input) input.value = q;
-  var p = produtosContagem.find(function(item){ return item.id === id; });
-  if (p) {
-    var meta = document.getElementById('meta-' + id);
-    if (meta) meta.innerHTML = window.gerarMetaHtml(p, q);
-  }
-  window.verificarBotaoSalvar();
+  var nova = parseInt(val) || 0;
+  if (nova > 0) contagensAtuais[id] = nova; else delete contagensAtuais[id];
+  window.atualizarMetaItem(id); window.verificarBotaoSalvar();
 };
 
-window.verificarBotaoSalvar = function() {
-  var btn = document.getElementById('btn-save-cont');
-  if (!btn) return;
-  var temContagem = Object.keys(contagensAtuais).some(function(k){ return contagensAtuais[k] > 0; });
-  btn.disabled = !temContagem;
-};
+window.verificarBotaoSalvar = function() { document.getElementById('btn-save-cont').disabled = !Object.keys(contagensAtuais).some(function(k) { return contagensAtuais[k] > 0; }); };
 
-// ============================================
-// CADASTRO E EDIÇÃO DE PRODUTOS
-// ============================================
 window.carregarProdutos = function() {
-  var loadEl = document.getElementById('load-prod');
-  if (loadEl) loadEl.style.display = 'block';
-  limiteCadExibicao = 50;
-
-  google.script.run.withSuccessHandler(function(prods) {
-    prodsCadastrados = (prods || []).map(function(p) {
-      p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '')).toLowerCase();
-      return p;
+  document.getElementById('load-prod').style.display = 'block'; document.getElementById('plist').innerHTML = '';
+  google.script.run.withSuccessHandler(function(dados) { 
+    prodsCadastrados = (dados || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '') + ' ' + (p.categoria || '')).toLowerCase();
+        return p;
     });
-    if (loadEl) loadEl.style.display = 'none';
-    window.renderListaCadastrados();
-  }).getProdutos();
+    document.getElementById('load-prod').style.display = 'none'; window.renderListaCadastrados(); 
+  }).withFailureHandler(function(err) { document.getElementById('load-prod').style.display = 'none'; window.toast('Erro ao carregar.', 'er'); }).getProdutos();
 };
 
 window.renderListaCadastrados = function() {
-  var container = document.getElementById('plist');
-  var busca = (document.getElementById('search-cad-input').value || '').toLowerCase().trim();
-
-  if (!prodsCadastrados || prodsCadastrados.length === 0) {
-    container.innerHTML = '<div class="card empty">Nenhum produto cadastrado.</div>';
-    return;
-  }
-
-  var filtrados = prodsCadastrados.filter(function(p) { return !busca || p._s.indexOf(busca) > -1; });
-  if (filtrados.length === 0) { container.innerHTML = '<div class="card empty">Nenhum produto localizado.</div>'; return; }
-
-  var exibidos = filtrados.slice(0, limiteCadExibicao);
-  var html = '';
-
-  exibidos.forEach(function(p) {
-    var cb = (p.codBarra && String(p.codBarra).trim() !== '') ? String(p.codBarra).trim() : 'Sem Cód.';
-    var imgHtml = (p.fotoUrl && p.fotoUrl !== 'NOT_FOUND') ? '<img src="' + p.fotoUrl + '" alt="foto">' : '📦';
-
-    html += '<div class="list-item">' +
-      '<div class="prod-thumb">' + imgHtml + '</div>' +
-      '<div style="flex:1;min-width:0;">' +
-        '<div style="font-size:13px;font-weight:700;color:#fff;word-break:break-word;">' + p.nome + '</div>' +
-        '<div class="list-cat"><span class="list-tag">' + (p.categoria || 'GERAL') + '</span> ID: ' + p.id + ' | Cód: ' + cb + ' | Ideal: ' + p.estoqueIdeal + '</div>' +
-      '</div>' +
-      '<div style="display:flex;gap:6px;">' +
-        '<button class="btn-edit-item" onclick="window.editarProduto(\'' + p.id + '\')" title="Editar">✏️</button>' +
-        '<button class="del" onclick="window.excluirProduto(\'' + p.id + '\')" title="Excluir">✕</button>' +
-      '</div>' +
-    '</div>';
+  var container = document.getElementById('plist'); var busca = (document.getElementById('search-cad-input').value || '').toLowerCase().trim();
+  
+  var filtrados = prodsCadastrados.filter(function(p) { 
+    return !busca || p._s.indexOf(busca) > -1; 
   });
-
-  if (filtrados.length > limiteCadExibicao) {
-    html += '<button class="btn-more" id="btn-load-more-cad">Carregar Mais (' + (filtrados.length - limiteCadExibicao) + ' restantes)</button>';
-  }
-
-  container.innerHTML = html;
-
-  var btnMore = document.getElementById('btn-load-more-cad');
-  if (btnMore) btnMore.addEventListener('click', function() { limiteCadExibicao += 50; window.renderListaCadastrados(); });
+  
+  if (filtrados.length === 0) { container.innerHTML = '<div class="card empty">Nenhum produto cadastrado.</div>'; return; }
+  var html = '';
+  filtrados.slice(0, limiteCadExibicao).forEach(function(p) {
+    var cb = String(p.codBarra || '').trim(); var cbHtml = cb.length >= 4 ? cb.slice(0, -4) + '<span class="barcode-highlight">' + cb.slice(-4) + '</span>' : (cb ? '<span class="barcode-highlight">' + cb + '</span>' : 'Sem Cód.');
+    var imgHtml = (p.fotoUrl && p.fotoUrl !== 'NOT_FOUND') ? '<img src="' + p.fotoUrl + '" alt="foto">' : '📦';
+    var thumbDiv = '<div class="prod-thumb">' + imgHtml + '</div>';
+    html += '<div class="list-item">' + thumbDiv + '<div style="flex:1;min-width:0;word-break:break-word"><span class="list-tag">ID '+p.id+'</span>'+p.nome+'<div class="list-cat">'+(p.categoria||'Geral')+' | Cód: '+cbHtml+'</div></div><div style="display:flex;gap:6px"><button class="btn-edit-item" onclick="editarProduto(\''+p.id+'\')">✏️</button><button class="del" onclick="excluirProduto(\''+p.id+'\')">&#x2715;</button></div></div>';
+  });
+  if (filtrados.length > limiteCadExibicao) html += '<button class="btn-more" id="btn-load-more-cad">Carregar Mais (' + (filtrados.length - limiteCadExibicao) + ' restantes)</button>';
+  container.innerHTML = html; var btn = document.getElementById('btn-load-more-cad'); if (btn) btn.addEventListener('click', function() { limiteCadExibicao += 50; window.renderListaCadastrados(); });
 };
 
 window.consultarProdutoInternet = function() {
-  var codBarra = (document.getElementById('ncodbarra').value || '').trim().replace(/\D/g, '');
-  if (!codBarra) { window.toast('Informe o código de barras para pesquisar!', 'er'); return; }
-
-  window.toast('Buscando dados do produto na web...', 'ok');
-
-  fetch('https://world.openfoodfacts.org/api/v2/product/' + codBarra + '.json')
-    .then(function(res){ return res.json(); })
-    .then(function(json){
-      if (json && json.status === 1 && json.product) {
-        var prod = json.product;
-        var nome = prod.product_name_pt || prod.product_name || '';
-        if (nome) {
-          document.getElementById('nname').value = nome.toUpperCase();
-          if (prod.categories_tags && prod.categories_tags.length > 0) {
-            var cat = prod.categories_tags[0].replace('en:', '').replace('pt:', '').toUpperCase();
-            document.getElementById('ncat').value = cat;
-          }
-          window.toast('Produto localizado: ' + nome, 'ok');
-        } else {
-          window.toast('Produto encontrado, mas sem nome cadastrado.', 'w');
-        }
-      } else {
-        window.toast('Produto não localizado na base pública.', 'w');
-      }
-    })
-    .catch(function(){ window.toast('Erro ao buscar dados na web.', 'er'); });
-};
-
-safeAddEvent('btn-search-web', 'click', window.consultarProdutoInternet);
-
-safeAddEvent('btn-add', 'click', function() {
-  var id = (document.getElementById('nid').value || '').trim();
-  var nome = (document.getElementById('nname').value || '').trim();
-  var cat = (document.getElementById('ncat').value || '').trim();
-  var cb = (document.getElementById('ncodbarra').value || '').trim();
-  var ideal = parseInt(document.getElementById('neideal').value) || 0;
-
-  if (!id || !nome) { window.toast('Informe o ID e o Nome do produto!', 'er'); return; }
-
-  var btn = this; btn.disabled = true; btn.textContent = 'Salvando...';
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      btn.disabled = false; btn.textContent = modoEdicao ? 'Salvar Edição' : 'Adicionar';
-      window.toast(res ? res.mensagem : 'Salvo com sucesso!', (res && res.sucesso !== false) ? 'ok' : 'er');
-      if (!res || res.sucesso !== false) {
-        document.getElementById('nid').value = '';
-        document.getElementById('nname').value = '';
-        document.getElementById('ncat').value = '';
-        document.getElementById('ncodbarra').value = '';
-        document.getElementById('neideal').value = '';
-        document.getElementById('nid').disabled = false;
-        modoEdicao = false;
-        document.getElementById('form-prod-title').textContent = 'NOVO PRODUTO';
-        document.getElementById('btn-cancel-edit').style.display = 'none';
-        window.carregarProdutos();
-      }
-    })
-    .withFailureHandler(function(err) {
-      btn.disabled = false; btn.textContent = modoEdicao ? 'Salvar Edição' : 'Adicionar';
-      window.toast('Erro ao salvar produto.', 'er');
-    })
-    .salvarProduto(id, nome, cat, ideal, cb, modoEdicao, usuarioLogado ? usuarioLogado.nome : '');
-});
-
-window.editarProduto = function(id) {
-  var p = prodsCadastrados.find(function(item){ return String(item.id) === String(id); });
-  if (!p) return;
-  document.getElementById('nid').value = p.id;
-  document.getElementById('nid').disabled = true;
-  document.getElementById('nname').value = p.nome;
-  document.getElementById('ncat').value = p.categoria || '';
-  document.getElementById('ncodbarra').value = p.codBarra || '';
-  document.getElementById('neideal').value = p.estoqueIdeal || 0;
-
-  modoEdicao = true;
-  document.getElementById('form-prod-title').textContent = 'EDITAR PRODUTO (ID: ' + p.id + ')';
-  document.getElementById('btn-add').textContent = 'Salvar Edição';
-  document.getElementById('btn-cancel-edit').style.display = 'inline-block';
-  window.scrollTo(0,0);
-};
-
-safeAddEvent('btn-cancel-edit', 'click', function() {
-  document.getElementById('nid').value = '';
-  document.getElementById('nid').disabled = false;
-  document.getElementById('nname').value = '';
-  document.getElementById('ncat').value = '';
-  document.getElementById('ncodbarra').value = '';
-  document.getElementById('neideal').value = '';
-  modoEdicao = false;
-  document.getElementById('form-prod-title').textContent = 'NOVO PRODUTO';
-  document.getElementById('btn-add').textContent = 'Adicionar';
-  this.style.display = 'none';
-});
-
-window.excluirProduto = function(id) {
-  if (!confirm('Tem certeza que deseja excluir o produto ID: ' + id + '?')) return;
-  window.toast('Removendo produto...', 'ok');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      window.toast('Produto removido!', 'ok');
-      window.carregarProdutos();
-    })
-    .withFailureHandler(function() {
-      window.toast('Erro ao remover produto.', 'er');
-    })
-    .removerProduto(id, usuarioLogado ? usuarioLogado.nome : '');
-};
-
-// ============================================
-// DASHBOARD BI E HISTÓRICO
-// ============================================
-window.carregarRelatorio = function() {
-  var loadEl = document.getElementById('load-rel');
-  if (loadEl) loadEl.style.display = 'block';
-  document.getElementById('bi-container').style.display = 'none';
-
-  google.script.run.withSuccessHandler(function(data) {
-    rawBiData = data;
-    if (loadEl) loadEl.style.display = 'none';
-    document.getElementById('bi-container').style.display = 'grid';
-    window.popularFiltrosBi(data);
-    window.renderDashboardBi();
-  }).getBIFullData();
-};
-
-window.popularFiltrosBi = function(data) {
-  var selCat = document.getElementById('bi-filter-cat');
-  var selResp = document.getElementById('bi-filter-resp');
-
-  var cats = new Set(), resps = new Set();
-  (data.produtos || []).forEach(function(p){ if(p.categoria) cats.add(p.categoria.toUpperCase()); });
-  (data.historico || []).forEach(function(h){ if(h.responsavel) resps.add(h.responsavel); });
-
-  var htmlCat = '<option value="TODAS">Todas as Categorias</option>';
-  cats.forEach(function(c){ htmlCat += '<option value="' + c + '">' + c + '</option>'; });
-  selCat.innerHTML = htmlCat;
-
-  var htmlResp = '<option value="TODOS">Todos os Usuários</option>';
-  resps.forEach(function(r){ htmlResp += '<option value="' + r + '">' + r + '</option>'; });
-  selResp.innerHTML = htmlResp;
-};
-
-safeAddEvent('bi-filter-ano', 'change', function(){ window.renderDashboardBi(); });
-safeAddEvent('bi-filter-cat', 'change', function(){ window.renderDashboardBi(); });
-safeAddEvent('bi-filter-resp', 'change', function(){ window.renderDashboardBi(); });
-
-window.renderDashboardBi = function() {
-  if (!rawBiData || !rawBiData.historico) return;
-
-  var fAno = document.getElementById('bi-filter-ano').value;
-  var fCat = document.getElementById('bi-filter-cat').value;
-  var fResp = document.getElementById('bi-filter-resp').value;
-
-  var filtrados = rawBiData.historico.filter(function(item) {
-    var matchAno = (fAno === 'TODOS') || (item.dataHora && item.dataHora.indexOf(fAno) > -1);
-    var matchCat = (fCat === 'TODAS') || (item.categoria && item.categoria.toUpperCase() === fCat);
-    var matchResp = (fResp === 'TODOS') || (item.responsavel === fResp);
-    return matchAno && matchCat && matchResp;
-  });
-
-  var totContado = 0, totOk = 0, totDiff = 0;
-  var diffsPorCat = {};
-
-  filtrados.forEach(function(item) {
-    totContado += (item.qtdContada || 0);
-    if (item.diferenca === 0) totOk++;
-    else totDiff++;
-
-    var c = item.categoria || 'GERAL';
-    if (!diffsPorCat[c]) diffsPorCat[c] = 0;
-    if (item.diferenca !== 0) diffsPorCat[c] += Math.abs(item.diferenca);
-  });
-
-  var totalValidos = totOk + totDiff;
-  var acuracia = totalValidos > 0 ? Math.round((totOk / totalValidos) * 100) : 100;
-
-  document.getElementById('bi-kpi-tot-contado').textContent = totContado;
-  document.getElementById('bi-kpi-tot-ok').textContent = totOk;
-  document.getElementById('bi-kpi-tot-diff').textContent = totDiff;
-  document.getElementById('bi-kpi-acuracia').textContent = acuracia + '%';
-
-  // DOUGHNUT CHART - DIVERGÊNCIAS
-  var ctxCat = document.getElementById('chart-cat');
-  if (ctxCat) {
-    if (chartCatInstance) chartCatInstance.destroy();
-    var labelsCat = Object.keys(diffsPorCat);
-    var dataCat = Object.values(diffsPorCat);
-
-    chartCatInstance = new Chart(ctxCat, {
-      type: 'doughnut',
-      data: {
-        labels: labelsCat.length > 0 ? labelsCat : ['Sem Divergências'],
-        datasets: [{
-          data: dataCat.length > 0 ? dataCat : [1],
-          backgroundColor: ['#f87171', '#fbbf24', '#60a5fa', '#a78bfa', '#34d399', '#f472b6']
-        }]
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 10 } } } } }
-    });
-  }
-
-  // LINE CHART - TENDÊNCIA
-  var ctxTrend = document.getElementById('chart-trend');
-  if (ctxTrend) {
-    if (chartTrendInstance) chartTrendInstance.destroy();
-
-    var agrupadoData = {};
-    filtrados.forEach(function(item) {
-      var dt = item.dataHora ? item.dataHora.split(' ')[0] : 'Desconhecido';
-      if (!agrupadoData[dt]) agrupadoData[dt] = 0;
-      agrupadoData[dt] += (item.qtdContada || 0);
-    });
-
-    chartTrendInstance = new Chart(ctxTrend, {
-      type: 'line',
-      data: {
-        labels: Object.keys(agrupadoData),
-        datasets: [{
-          label: 'Qtd Contada',
-          data: Object.values(agrupadoData),
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16,185,129,0.1)',
-          fill: true,
-          tension: 0.3
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-          y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
-        },
-        plugins: { legend: { display: false } }
-      }
-    });
-  }
-};
-
-window.carregarHistorico = function() {
-  var loadEl = document.getElementById('load-historico');
-  if (loadEl) loadEl.style.display = 'block';
-  document.getElementById('historico-list').innerHTML = '';
-
-  google.script.run.withSuccessHandler(function(grupos) {
-    historicoSalvoData = grupos || [];
-    if (loadEl) loadEl.style.display = 'none';
-    var container = document.getElementById('historico-list');
-
-    if (!historicoSalvoData || historicoSalvoData.length === 0) {
-      container.innerHTML = '<div class="card empty">Nenhum relatório salvo no histórico.</div>';
-      return;
-    }
-
-    var html = '';
-    historicoSalvoData.forEach(function(g, idx) {
-      html += '<div class="card card-clickable" onclick="window.exibirModalRelatorioIndex(' + idx + ')">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-          '<div style="font-size:14px;font-weight:800;color:#fff;">📅 ' + g.dataHora + '</div>' +
-          '<span class="badge-status b-ok">Resp: ' + g.responsavel + '</span>' +
-        '</div>' +
-        '<div style="font-size:12px;color:#94a3b8;display:flex;gap:12px;margin-top:6px;">' +
-          '<span>Total: <strong>' + g.totalItens + '</strong></span>' +
-          '<span style="color:#f87171">Falta: <strong>' + g.itensFalta + '</strong></span>' +
-          '<span style="color:#fbbf24">Sobra: <strong>' + g.itensSobra + '</strong></span>' +
-          '<span style="color:#34d399">OK: <strong>' + g.itensOk + '</strong></span>' +
-        '</div>' +
-      '</div>';
-    });
-
-    container.innerHTML = html;
-  }).getHistoricoAgrupado();
-};
-
-window.exibirModalRelatorioIndex = function(idx) {
-  if (historicoSalvoData && historicoSalvoData[idx]) {
-    window.exibirModalRelatorio(historicoSalvoData[idx]);
-  }
+  var cod = document.getElementById('ncodbarra').value.trim(); if (!cod) return;
+  var btn = document.getElementById('btn-search-web'); btn.disabled = true; btn.textContent = '...';
+  fetch("https://world.openfoodfacts.org/api/v2/product/" + cod.replace(/\D/g, '') + ".json").then(function(res) { return res.json(); }).then(function(data) {
+      btn.disabled = false; btn.textContent = '🔍';
+      if (data.status === 1 && data.product && data.product.product_name) { document.getElementById('nname').value = data.product.product_name_pt || data.product.product_name; window.toast('Encontrado!', 'ok'); } else window.toast('Não encontrado.', 'er');
+    }).catch(function() { btn.disabled = false; btn.textContent = '🔍'; window.toast('Erro na busca.', 'er'); });
 };
 
 window.exibirModalRelatorio = function(resumo) {
   if (!resumo) return;
-  relatorioAtivoAdicao = resumo;
-
-  document.getElementById('rel-title').textContent = 'Relatório de ' + resumo.dataHora;
-  document.getElementById('rel-sub').textContent = 'Responsável: ' + resumo.responsavel;
+  document.getElementById('rel-sub').innerHTML = '<strong>Responsável:</strong> ' + resumo.responsavel + '<br><strong>Data/Hora:</strong> ' + resumo.dataHora;
   document.getElementById('rel-tot-itens').textContent = resumo.totalItens || 0;
+  document.getElementById('rel-tot-ok').textContent = resumo.itensOk || 0;
   document.getElementById('rel-tot-falta').textContent = resumo.itensFalta || 0;
   document.getElementById('rel-tot-sobra').textContent = resumo.itensSobra || 0;
-  document.getElementById('rel-tot-ok').textContent = resumo.itensOk || 0;
 
-  var tbody = document.getElementById('rel-tbody');
   var html = '';
-
   (resumo.itens || []).forEach(function(item) {
-    var diff = item.diferenca;
-    var statusClass = 'b-ok', statusTxt = 'OK';
-    if (diff < 0) { statusClass = 'b-falta'; statusTxt = 'FALTA (' + diff + ')'; }
-    else if (diff > 0) { statusClass = 'b-sobra'; statusTxt = 'SOBRA (+' + diff + ')'; }
-
-    html += '<tr>' +
-      '<td style="font-weight:700;color:#fff;">' + item.nome + '</td>' +
-      '<td>' + item.estoqueIdeal + '</td>' +
-      '<td>' + item.qtdContada + '</td>' +
-      '<td>' + (diff > 0 ? '+' + diff : diff) + '</td>' +
-      '<td><span class="badge-status ' + statusClass + '">' + statusTxt + '</span></td>' +
-    '</tr>';
+    var ideal = parseInt(item.estoqueIdeal) || 0; var diff = item.qtdContada - ideal;
+    var status = diff === 0 ? '<span class="badge-status b-ok">OK</span>' : (diff < 0 ? '<span class="badge-status b-falta">Falta</span>' : '<span class="badge-status b-sobra">Sobra</span>');
+    html += `<tr><td><strong>${item.nome}</strong><br><span style="font-size:10px;color:#94a3b8">ID: ${item.id}</span></td><td>${ideal}</td><td>${item.qtdContada}</td><td>${diff > 0 ? '+' + diff : diff}</td><td>${status}</td></tr>`;
   });
-
-  tbody.innerHTML = html;
-
-  var modal = document.getElementById('modal-relatorio');
-  if (modal) {
-    var btnExtraContainer = modal.querySelector('.extra-rel-buttons');
-    if (!btnExtraContainer) {
-      btnExtraContainer = document.createElement('div');
-      btnExtraContainer.className = 'extra-rel-buttons row no-print';
-      btnExtraContainer.style.marginTop = '12px';
-      btnExtraContainer.innerHTML = '<button class="btn" onclick="window.abrirModalAdicionarItem()" style="flex:1;background:linear-gradient(135deg,#3b82f6,#1d4ed8);font-size:12px">➕ Adicionar Item</button>' +
-        '<button class="btn" onclick="window.recalcularRelatorioOriginal()" style="flex:1;background:linear-gradient(135deg,#8b5cf6,#6d28d9);font-size:12px">🔄 Recalcular com Cache</button>';
-      modal.querySelector('.modal-cam-content').appendChild(btnExtraContainer);
-    }
-    modal.style.display = 'flex';
-  }
+  document.getElementById('rel-tbody').innerHTML = html;
+  document.getElementById('modal-relatorio').style.display = 'flex';
 };
 
-safeAddEvent('btn-print-relatorio', 'click', function() { window.print(); });
-
-window.abrirModalAdicionarItem = function() {
-  if (!relatorioAtivoAdicao) return;
-  document.getElementById('add-item-sub').textContent = 'Injetando no relatório de ' + relatorioAtivoAdicao.dataHora;
-  document.getElementById('modal-add-item').style.display = 'flex';
-  window.renderListaAdicaoItem();
-};
-
-window.renderListaAdicaoItem = function() {
-  var container = document.getElementById('lista-add-item');
-  var busca = (document.getElementById('search-add-item').value || '').toLowerCase().trim();
-
-  if (!produtosContagem || produtosContagem.length === 0) {
-    container.innerHTML = '<div class="card empty">Carregue a contagem primeiro.</div>';
-    return;
-  }
-
-  var filtrados = produtosContagem.filter(function(p) { return !busca || p._s.indexOf(busca) > -1; });
-  var html = '';
-
-  filtrados.slice(0, 30).forEach(function(p) {
-    html += '<div class="prod-item">' +
-      '<div class="prod-info"><div class="prod-name">' + p.nome + '</div><div class="prod-meta">ID: ' + p.id + ' | Ideal: ' + p.estoqueIdeal + '</div></div>' +
-      '<div class="prod-counter">' +
-        '<input class="qty-input" id="add-qtd-' + p.id + '" value="1" type="number" min="1" style="width:50px;">' +
-        '<button class="btn" onclick="window.injetarItemRelatorio(\'' + p.id + '\')" style="padding:6px 10px;font-size:12px;">Adicionar</button>' +
-      '</div></div>';
-  });
-
-  container.innerHTML = html;
-};
-
-window.injetarItemRelatorio = function(id) {
-  if (!relatorioAtivoAdicao) return;
-  var qtdInput = document.getElementById('add-qtd-' + id);
-  var qtd = parseInt(qtdInput.value) || 1;
-
-  window.toast('Adicionando item ao relatório...', 'ok');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      window.toast(res ? res.mensagem : 'Item adicionado!', (res && res.sucesso) ? 'ok' : 'er');
-      if (res && res.sucesso) {
-        document.getElementById('modal-add-item').style.display = 'none';
-        document.getElementById('modal-relatorio').style.display = 'none';
-        window.carregarHistorico();
-      }
-    })
-    .withFailureHandler(function() { window.toast('Erro ao injetar item.', 'er'); })
-    .adicionarItemAoRelatorio(relatorioAtivoAdicao.dataHora, id, qtd, relatorioAtivoAdicao.responsavel);
-};
-
-window.recalcularRelatorioOriginal = function() {
-  if (!relatorioAtivoAdicao) return;
-  if (!confirm('Deseja recalcular a diferença do relatório ' + relatorioAtivoAdicao.dataHora + ' usando os saldos ideais do Cache atual?')) return;
-
-  window.toast('Recalculando valores...', 'ok');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      window.toast(res ? res.mensagem : 'Relatório recalculado!', (res && res.sucesso) ? 'ok' : 'er');
-      if (res && res.sucesso) {
-        document.getElementById('modal-relatorio').style.display = 'none';
-        window.carregarHistorico();
-      }
-    })
-    .withFailureHandler(function() { window.toast('Erro ao recalcular.', 'er'); })
-    .recalcularRelatorio(relatorioAtivoAdicao.dataHora);
-};
-
-// ============================================
-// VALIDADES E NOTIFICAÇÕES
-// ============================================
-window.carregarValidades = function() {
-  var loadEl = document.getElementById('load-validades');
-  if (loadEl) loadEl.style.display = 'block';
-
-  google.script.run.withSuccessHandler(function(list) {
-    validadesData = list || [];
-    window.atualizarMapaValidades();
-    if (loadEl) loadEl.style.display = 'none';
-
-    if (produtosContagem && produtosContagem.length > 0) {
-      window.popularSelectValidades();
-    } else {
-      google.script.run.withSuccessHandler(function(prods) {
-        produtosContagem = (prods || []).map(function(p){ p._s = ((p.nome||'')+' '+(p.id||'')+' '+(p.codBarra||'')).toLowerCase(); return p; });
-        window.popularSelectValidades();
-      }).getProdutos();
-    }
-    window.renderListaValidades();
-  }).getValidades();
-};
-
-window.popularSelectValidades = function() {
-  var selCat = document.getElementById('val-filter-cat');
-  var selProd = document.getElementById('val-select-prod');
-  var busca = (document.getElementById('val-search-input').value || '').toLowerCase().trim();
-
-  var catSet = new Set();
-  (produtosContagem || []).forEach(function(p){ if(p.categoria) catSet.add(p.categoria.toUpperCase()); });
-
-  var htmlCat = '<option value="TODAS">Todas as Categorias</option>';
-  catSet.forEach(function(c){ htmlCat += '<option value="' + c + '">' + c + '</option>'; });
-  selCat.innerHTML = htmlCat;
-
-  var catSel = selCat.value;
-  var filtrados = (produtosContagem || []).filter(function(p) {
-    var matchBusca = !busca || p._s.indexOf(busca) > -1;
-    var matchCat = (catSel === 'TODAS') || (p.categoria && p.categoria.toUpperCase() === catSel);
-    return matchBusca && matchCat;
-  });
-
-  var htmlProd = '<option value="" disabled selected>Selecione um Produto (' + filtrados.length + ')...</option>';
-  filtrados.slice(0, 100).forEach(function(p) {
-    htmlProd += '<option value="' + p.id + '">' + p.nome + ' (ID: ' + p.id + ')</option>';
-  });
-  selProd.innerHTML = htmlProd;
-};
-
-window.renderListaValidades = function() {
-  var container = document.getElementById('lista-validades');
-  if (!validadesData || validadesData.length === 0) {
-    container.innerHTML = '<div class="card empty">Nenhuma validade registrada.</div>';
-    return;
-  }
-
-  var hoje = new Date(); hoje.setHours(0,0,0,0);
-  var html = '';
-
-  validadesData.forEach(function(v) {
-    var parts = (v.dataVenc || '').split('/');
-    var badgeClass = 'b-ok', statusTxt = 'Em Dia';
-
-    if (parts.length === 3) {
-      var dtVal = new Date(parts[2], parts[1] - 1, parts[0]);
-      var diffDias = Math.ceil((dtVal - hoje) / (1000 * 60 * 60 * 24));
-
-      if (diffDias < 0) { badgeClass = 'b-falta'; statusTxt = 'VENCIDO (' + Math.abs(diffDias) + ' dias)'; }
-      else if (diffDias <= 7) { badgeClass = 'b-sobra'; statusTxt = 'PRÓXIMO (' + diffDias + ' dias)'; }
-      else { badgeClass = 'b-ok'; statusTxt = 'OK (' + diffDias + ' dias)'; }
-    }
-
-    html += '<div class="list-item">' +
-      '<div style="flex:1;min-width:0;">' +
-        '<div style="font-size:13px;font-weight:700;color:#fff;">' + v.nome + '</div>' +
-        '<div class="list-cat">Vencimento: <strong>' + v.dataVenc + '</strong> | Qtd: ' + v.quantidade + (v.lote ? ' | Lote: ' + v.lote : '') + '</div>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<span class="badge-status ' + badgeClass + '">' + statusTxt + '</span>' +
-        '<button class="del" onclick="window.excluirValidade(' + v.row + ')" title="Excluir">✕</button>' +
-      '</div>' +
-    '</div>';
-  });
-
-  container.innerHTML = html;
-};
-
-window.excluirValidade = function(row) {
-  if (!confirm('Deseja remover este registro de validade?')) return;
-  window.toast('Removendo registro...', 'ok');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      window.toast(res ? res.mensagem : 'Removido!', 'ok');
-      window.carregarValidades();
-    })
-    .withFailureHandler(function() { window.toast('Erro ao remover.', 'er'); })
-    .removerValidade(row);
-};
-
-window.carregarNotificacoes = function() {
-  var loadEl = document.getElementById('load-notif');
-  if (loadEl) loadEl.style.display = 'block';
-  document.getElementById('notif-list').innerHTML = '';
-
-  google.script.run.withSuccessHandler(function(vencs) {
-    validadesData = vencs || [];
-    window.atualizarMapaValidades();
-    if (loadEl) loadEl.style.display = 'none';
-
-    var container = document.getElementById('notif-list');
-    var hoje = new Date(); hoje.setHours(0,0,0,0);
-    var notifs = [];
-
-    (validadesData || []).forEach(function(v) {
-      var parts = (v.dataVenc || '').split('/');
-      if (parts.length === 3) {
-        var dtVal = new Date(parts[2], parts[1] - 1, parts[0]);
-        var diffDias = Math.ceil((dtVal - hoje) / (1000 * 60 * 60 * 24));
-
-        if (diffDias < 0) {
-          notifs.push({ tipo: 'notif-d', titulo: 'PRODUTO VENCIDO', desc: v.nome + ' venceu em ' + v.dataVenc + ' (Qtd: ' + v.quantidade + ')' });
-        } else if (diffDias <= 7) {
-          notifs.push({ tipo: 'notif-w', titulo: 'VENCIMENTO PRÓXIMO', desc: v.nome + ' vence em ' + diffDias + ' dias (' + v.dataVenc + ')' });
-        }
-      }
-    });
-
-    if (notifs.length === 0) {
-      container.innerHTML = '<div class="card empty">Nenhuma notificação urgente de vencimento no momento.</div>';
-      return;
-    }
-
-    var html = '';
-    notifs.forEach(function(n) {
-      html += '<div class="notif ' + n.tipo + '">' +
-        '<div style="font-weight:800;margin-bottom:2px;">' + n.titulo + '</div>' +
-        '<div style="color:#cbd5e1;">' + n.desc + '</div>' +
-      '</div>';
-    });
-
-    container.innerHTML = html;
-  }).getValidades();
-};
-
-// ============================================
-// CARTAZ DE PROMOÇÃO
-// ============================================
-window.prepararTelaCartaz = function() {
-  if (produtosContagem && produtosContagem.length > 0) {
-    window.popularSelectCartaz();
-  } else {
-    google.script.run.withSuccessHandler(function(prods) {
-      produtosContagem = (prods || []).map(function(p){ p._s = ((p.nome||'')+' '+(p.id||'')+' '+(p.codBarra||'')).toLowerCase(); return p; });
-      window.popularSelectCartaz();
-    }).getProdutos();
-  }
-};
-
-window.popularSelectCartaz = function() {
-  var selCat = document.getElementById('cartaz-filter-cat');
-  var selProd = document.getElementById('cartaz-select-prod');
-  var busca = (document.getElementById('cartaz-search').value || '').toLowerCase().trim();
-
-  var catSet = new Set();
-  (produtosContagem || []).forEach(function(p){ if(p.categoria) catSet.add(p.categoria.toUpperCase()); });
-
-  var htmlCat = '<option value="TODAS">Todas as Categorias</option>';
-  catSet.forEach(function(c){ htmlCat += '<option value="' + c + '">' + c + '</option>'; });
-  selCat.innerHTML = htmlCat;
-
-  var catSel = selCat.value;
-  var filtrados = (produtosContagem || []).filter(function(p) {
-    var matchBusca = !busca || p._s.indexOf(busca) > -1;
-    var matchCat = (catSel === 'TODAS') || (p.categoria && p.categoria.toUpperCase() === catSel);
-    return matchBusca && matchCat;
-  });
-
-  var htmlProd = '<option value="" disabled selected>Selecione um Produto (' + filtrados.length + ')...</option>';
-  filtrados.slice(0, 100).forEach(function(p) {
-    htmlProd += '<option value="' + p.id + '">' + p.nome + ' (ID: ' + p.id + ')</option>';
-  });
-  selProd.innerHTML = htmlProd;
-};
-
-window.atualizarPreviewCartaz = function() {
-  var nome = document.getElementById('cartaz-prod-name').value || 'NOME DO PRODUTO';
-  var preco = document.getElementById('cartaz-prod-price').value || '0,00';
-
-  document.getElementById('prev-prod-title').textContent = nome.toUpperCase();
-
-  var pClean = preco.replace('R$', '').trim();
-  var parts = pClean.split(',');
-  var intPart = parts[0] || '0';
-  var decPart = parts.length > 1 ? ',' + parts[1] : ',00';
-
-  document.getElementById('prev-price-int').textContent = intPart;
-  document.getElementById('prev-price-dec').textContent = decPart;
-};
-
-safeAddEvent('btn-print-cartaz', 'click', function() { window.print(); });
-
-// ============================================
-// NOTA FISCAL E FATURAMENTO (PLANILHA EXTERNA)
-// ============================================
+// GESTÃO DE NOTAS FISCAIS
 window.carregarNotasFiscais = function() {
-  var loadEl = document.getElementById('load-nf');
-  if (loadEl) loadEl.style.display = 'block';
-
-  google.script.run.withSuccessHandler(function(res) {
-    if (loadEl) loadEl.style.display = 'none';
-    if (res && res.sucesso) {
-      nfDadosList = res.dadosNF || [];
-      fatDadosObj = res.dadosFat || { fichario: [], email: [], caixaResponsavel: [], whatsapp: [], entrega: [], avisos: [] };
-      window.popularFiltrosNF();
-      window.renderAbaSelecionadaNF();
-    } else {
-      window.toast(res ? res.mensagem : 'Erro ao carregar dados externos.', 'er');
-    }
-  }).getDadosNotaFiscalExterna();
+  document.getElementById('load-nf').style.display = 'block';
+  document.getElementById('lista-nf').innerHTML = '';
+  document.getElementById('lista-fat').innerHTML = '';
+  
+  google.script.run
+    .withSuccessHandler(function(res) {
+      document.getElementById('load-nf').style.display = 'none';
+      if (res && res.sucesso) {
+        nfDadosList = res.dadosNF || [];
+        fatDadosObj = res.dadosFat || { fichario: [], email: [], caixaResponsavel: [], whatsapp: [], entrega: [], avisos: [] };
+        window.atualizarFiltrosNF();
+        window.renderAbaSelecionadaNF();
+      } else {
+        window.toast(res ? res.mensagem : 'Erro ao carregar NFs', 'er');
+      }
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-nf').style.display = 'none';
+      window.toast('Erro ao carregar dados da planilha externa.', 'er');
+    })
+    .getDadosNotaFiscalExterna();
 };
 
-window.popularFiltrosNF = function() {
-  var selCat = document.getElementById('nf-filter-cat');
-  var html = '<option value="TODAS">Todas as Categorias / Seções</option>';
-  if (abaNFAtiva === 'nf') {
-    html += '<option value="DIA">Frequência: DIA</option><option value="JUNTAR">Frequência: JUNTAR</option><option value="MENSAL">Frequência: MENSAL</option>';
+window.carregarVencimentosClientesPage = function() {
+  var loadEl = document.getElementById('load-venc-cli');
+  if (loadEl) loadEl.style.display = 'block';
+  var listEl = document.getElementById('lista-venc-cliente');
+  if (listEl) listEl.innerHTML = '';
+  limiteVencCliExibicao = 50;
+
+  google.script.run
+    .withSuccessHandler(function(lista) {
+      if (loadEl) loadEl.style.display = 'none';
+      vencClientesList = lista || [];
+      window.renderListaVencClientes();
+    })
+    .withFailureHandler(function(err) {
+      if (loadEl) loadEl.style.display = 'none';
+      window.toast('Erro ao carregar vencimentos de clientes.', 'er');
+    })
+    .getVencimentosClientes();
+};
+
+window.atualizarFiltrosNF = function() {
+  var sel = document.getElementById('nf-filter-cat');
+  var html = '<option value="TODAS">Todas as Categorias</option>';
+  if (abaNFAtiva === 'fat') {
+    html += '<option value="FICHARIO">📁 Fichário</option>';
+    html += '<option value="EMAIL">✉️ E-mail</option>';
+    html += '<option value="CAIXA">🧑‍💼 Caixa - Responsável</option>';
+    html += '<option value="WHATSAPP">💬 WhatsApp</option>';
+    html += '<option value="ENTREGA">🚚 Entrega</option>';
+    html += '<option value="AVISOS">⚠️ Avisos</option>';
   } else {
-    html += '<option value="FICHARIO">📁 Fichário</option><option value="EMAIL">✉️ E-mail</option><option value="CAIXA">🧑‍💼 Caixa - Responsável</option><option value="WHATSAPP">💬 WhatsApp</option><option value="ENTREGA">🚚 Entrega</option><option value="AVISOS">⚠️ Avisos</option>';
+    html += '<option value="DIA">🔴 Dia</option>';
+    html += '<option value="JUNTAR">🟡 Juntar</option>';
+    html += '<option value="MENSAL">🟢 Mensal</option>';
   }
-  selCat.innerHTML = html;
+  sel.innerHTML = html;
 };
 
 window.alternarAbaNF = function(aba) {
@@ -2458,166 +2172,153 @@ window.alternarAbaNF = function(aba) {
   document.getElementById('tab-btn-fat').className = 'tab-btn' + (aba === 'fat' ? ' active' : '');
   document.getElementById('view-tab-nf').style.display = aba === 'nf' ? 'block' : 'none';
   document.getElementById('view-tab-fat').style.display = aba === 'fat' ? 'block' : 'none';
-  window.popularFiltrosNF();
+  window.atualizarFiltrosNF();
   window.renderAbaSelecionadaNF();
 };
 
 window.renderAbaSelecionadaNF = function() {
+  if (abaNFAtiva === 'nf') window.renderListaNF();
+  else if (abaNFAtiva === 'fat') window.renderListaFat();
+};
+
+window.renderListaNF = function() {
+  var container = document.getElementById('lista-nf');
   var busca = (document.getElementById('nf-search-input').value || '').toLowerCase().trim();
-  var fCat = document.getElementById('nf-filter-cat').value;
+  var filtroCat = document.getElementById('nf-filter-cat').value;
+  
+  var filtrados = nfDadosList.filter(function(item) {
+    var matchBusca = !busca || 
+      (item.cliente || '').toLowerCase().indexOf(busca) > -1 || 
+      (item.frequencia || '').toLowerCase().indexOf(busca) > -1 || 
+      (item.canal || '').toLowerCase().indexOf(busca) > -1 || 
+      (item.contato || '').toLowerCase().indexOf(busca) > -1;
+    
+    var matchCat = (filtroCat === 'TODAS') || ((item.frequencia || '').toUpperCase().indexOf(filtroCat) > -1);
+    return matchBusca && matchCat;
+  });
 
-  if (abaNFAtiva === 'nf') {
-    var container = document.getElementById('lista-nf');
-    var filtrados = (nfDadosList || []).filter(function(item) {
-      var matchBusca = !busca || (item.cliente || '').toLowerCase().indexOf(busca) > -1 || (item.contato || '').toLowerCase().indexOf(busca) > -1;
-      var matchCat = (fCat === 'TODAS') || (item.frequencia === fCat);
-      return matchBusca && matchCat;
-    });
-
-    if (filtrados.length === 0) { container.innerHTML = '<div class="card empty">Nenhum registro localizado no Controle NF.</div>'; return; }
-
-    var html = '';
-    filtrados.forEach(function(item) {
-      html += '<div class="list-item">' +
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:14px;font-weight:800;color:#fff;">' + item.cliente + '</div>' +
-          '<div class="list-cat">Frequência: <strong>' + item.frequencia + '</strong> | Canal: ' + item.canal + ' | Contato: ' + (item.contato || 'Não informado') + '</div>' +
-        '</div>' +
-      '</div>';
-    });
-    container.innerHTML = html;
-  } else {
-    var containerFat = document.getElementById('lista-fat');
-    var htmlFat = '';
-
-    function renderSecao(titulo, lista, icone) {
-      var mFiltro = (fCat === 'TODAS') || (fCat.indexOf(titulo.toUpperCase()) > -1);
-      if (!mFiltro) return '';
-
-      var fItems = (lista || []).filter(function(x) {
-        var str = typeof x === 'object' ? (x.cliente + ' ' + x.responsavel) : String(x);
-        return !busca || str.toLowerCase().indexOf(busca) > -1;
-      });
-
-      if (fItems.length === 0) return '';
-
-      var secHtml = '<div class="card"><div class="card-title">' + icone + ' ' + titulo + ' (' + fItems.length + ')</div>';
-      fItems.forEach(function(it) {
-        if (typeof it === 'object') {
-          secHtml += '<div class="list-item"><div style="flex:1;"><div style="font-size:13px;font-weight:700;color:#fff;">' + it.cliente + '</div><div class="list-cat" style="color:#fbbf24">Responsável: ' + it.responsavel + '</div></div></div>';
-        } else {
-          secHtml += '<div class="list-item"><div style="font-size:13px;font-weight:700;color:#fff;">' + it + '</div></div>';
-        }
-      });
-      secHtml += '</div>';
-      return secHtml;
-    }
-
-    htmlFat += renderSecao('FICHARIO', fatDadosObj.fichario, '📁');
-    htmlFat += renderSecao('EMAIL', fatDadosObj.email, '✉️');
-    htmlFat += renderSecao('CAIXA', fatDadosObj.caixaResponsavel, '🧑‍💼');
-    htmlFat += renderSecao('WHATSAPP', fatDadosObj.whatsapp, '💬');
-    htmlFat += renderSecao('ENTREGA', fatDadosObj.entrega, '🚚');
-    htmlFat += renderSecao('AVISOS', fatDadosObj.avisos, '⚠️');
-
-    containerFat.innerHTML = htmlFat || '<div class="card empty">Nenhum registro localizado no Faturamento.</div>';
+  if (filtrados.length === 0) {
+    container.innerHTML = '<div class="card empty">Nenhum registro encontrado no Controle NF.</div>';
+    return;
   }
+  var html = '';
+  filtrados.forEach(function(item) {
+    var badgeCor = 'b-ok';
+    var freq = (item.frequencia || '').toUpperCase();
+    if (freq.indexOf('DIA') > -1) badgeCor = 'b-falta';
+    else if (freq.indexOf('JUNTAR') > -1) badgeCor = 'b-sobra';
+    else if (freq.indexOf('MENSAL') > -1) badgeCor = 'b-ok';
+    html += '<div class="card" style="margin-bottom:10px;padding:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+        '<span class="badge-status ' + badgeCor + '">' + (item.frequencia || 'GERAL') + '</span>' +
+        '<span style="font-size:11px;font-weight:700;color:#818cf8;background:rgba(99,102,241,0.15);padding:2px 8px;border-radius:6px;">' + (item.canal || 'CANAL') + '</span>' +
+      '</div>' +
+      '<div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px;">' + item.cliente + '</div>' +
+      '<div style="font-size:12px;color:#cbd5e1;word-break:break-all;"><strong>Destino / Contato:</strong> ' + (item.contato || '-') + '</div>' +
+    '</div>';
+  });
+  container.innerHTML = html;
 };
 
-safeAddEvent('btn-open-add-nf-modal', 'click', function() {
-  document.getElementById('modal-add-nf-cliente').style.display = 'flex';
-});
-
-safeAddEvent('add-nf-tipo', 'change', function() {
-  var t = this.value;
-  document.getElementById('form-group-nf').style.display = t === 'NF' ? 'block' : 'none';
-  document.getElementById('form-group-fat').style.display = t === 'FAT' ? 'block' : 'none';
-});
-
-safeAddEvent('add-fat-cat', 'change', function() {
-  document.getElementById('group-fat-resp').style.display = this.value === 'CAIXA' ? 'block' : 'none';
-});
-
-safeAddEvent('btn-save-novo-cliente-nf', 'click', function() {
-  var tipo = document.getElementById('add-nf-tipo').value;
-  var payload = { tipo: tipo };
-
-  if (tipo === 'NF') {
-    payload.cliente = document.getElementById('add-nf-nome').value.trim();
-    payload.frequencia = document.getElementById('add-nf-freq').value;
-    payload.canal = document.getElementById('add-nf-canal').value;
-    payload.contato = document.getElementById('add-nf-contato').value.trim();
-    if (!payload.cliente) { window.toast('Informe o nome do produtor/cliente!', 'er'); return; }
-  } else {
-    payload.categoria = document.getElementById('add-fat-cat').value;
-    payload.cliente = document.getElementById('add-fat-nome').value.trim();
-    payload.responsavel = document.getElementById('add-fat-resp').value.trim();
-    if (!payload.cliente) { window.toast('Informe o nome do cliente ou o texto do aviso!', 'er'); return; }
-  }
-
-  var btn = this; btn.disabled = true; btn.textContent = 'Salvando...';
-
-  google.script.run.withSuccessHandler(function(res) {
-    btn.disabled = false; btn.textContent = 'Salvar na Planilha Externa';
-    window.toast(res ? res.mensagem : 'Salvo!', (res && res.sucesso) ? 'ok' : 'er');
-    if (res && res.sucesso) {
-      document.getElementById('modal-add-nf-cliente').style.display = 'none';
-      window.carregarNotasFiscais();
+window.renderListaFat = function() {
+  var container = document.getElementById('lista-fat');
+  var busca = (document.getElementById('nf-search-input').value || '').toLowerCase().trim();
+  var filtroCat = document.getElementById('nf-filter-cat').value;
+  
+  var html = '';
+  if (filtroCat === 'TODAS' || filtroCat === 'FICHARIO') {
+    var ficharioFiltrado = (fatDadosObj.fichario || []).filter(c => !busca || c.toLowerCase().indexOf(busca) > -1);
+    if (ficharioFiltrado.length > 0) {
+      html += '<div class="card"><div class="card-title" style="color:#f87171">📁 FICHÁRIO (' + ficharioFiltrado.length + ')</div>';
+      ficharioFiltrado.forEach(function(c) {
+        html += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;font-weight:700;color:#fff">' + c + '</div>';
+      });
+      html += '</div>';
     }
-  }).salvarClienteExterno(payload);
-});
-
-// ============================================
-// VENCIMENTO DE CLIENTES (LÊ SOMENTE "Relatório Clientes")
-// ============================================
-window.carregarVencimentosClientesPage = function() {
-  var loadEl = document.getElementById('load-venc-cli');
-  if (loadEl) loadEl.style.display = 'block';
-
-  google.script.run.withSuccessHandler(function(lista) {
-    vencClientesList = lista || [];
-    if (loadEl) loadEl.style.display = 'none';
-    limiteVencCliExibicao = 50;
-    window.renderListaVencClientes();
-  }).getVencimentosClientes();
-};
-
-window.abrirModalVencCliente = function(id) {
-  var cli = (vencClientesList || []).find(function(c){ return String(c.id) === String(id); });
-  if (!cli) return;
-
-  document.getElementById('vc-cliente-id').value = cli.id;
-  document.getElementById('vc-cliente-nome').textContent = cli.nome;
-  document.getElementById('vc-dt-venc').value = dateBRtoIso(cli.dataVenc);
-  document.getElementById('vc-dt-venc-ate').value = dateBRtoIso(cli.dataVencAte);
-  document.getElementById('vc-obs').value = cli.observacao || '';
-  document.getElementById('modal-venc-cliente-edit').style.display = 'flex';
+  }
+  if (filtroCat === 'TODAS' || filtroCat === 'EMAIL') {
+    var emailFiltrado = (fatDadosObj.email || []).filter(c => !busca || c.toLowerCase().indexOf(busca) > -1);
+    if (emailFiltrado.length > 0) {
+      html += '<div class="card"><div class="card-title" style="color:#60a5fa">✉️ EMAIL (' + emailFiltrado.length + ')</div>';
+      emailFiltrado.forEach(function(c) {
+        html += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;font-weight:700;color:#fff">' + c + '</div>';
+      });
+      html += '</div>';
+    }
+  }
+  if (filtroCat === 'TODAS' || filtroCat === 'CAIXA') {
+    var caixaFiltrado = (fatDadosObj.caixaResponsavel || []).filter(i => !busca || i.cliente.toLowerCase().indexOf(busca) > -1 || i.responsavel.toLowerCase().indexOf(busca) > -1);
+    if (caixaFiltrado.length > 0) {
+      html += '<div class="card"><div class="card-title" style="color:#fbbf24">🧑‍💼 CAIXA - RESPONSÁVEL (' + caixaFiltrado.length + ')</div>';
+      caixaFiltrado.forEach(function(i) {
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<div style="font-size:13px;font-weight:700;color:#fff">' + i.cliente + '</div>' +
+          '<div style="font-size:11px;font-weight:800;color:#fbbf24;background:rgba(245,158,11,0.15);padding:2px 8px;border-radius:6px;">' + (i.responsavel || 'Avisar') + '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+  }
+  if (filtroCat === 'TODAS' || filtroCat === 'WHATSAPP') {
+    var wppFiltrado = (fatDadosObj.whatsapp || []).filter(c => !busca || c.toLowerCase().indexOf(busca) > -1);
+    if (wppFiltrado.length > 0) {
+      html += '<div class="card"><div class="card-title" style="color:#a78bfa">💬 WHATSAPP (' + wppFiltrado.length + ')</div>';
+      wppFiltrado.forEach(function(c) {
+        html += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;font-weight:700;color:#fff">' + c + '</div>';
+      });
+      html += '</div>';
+    }
+  }
+  if (filtroCat === 'TODAS' || filtroCat === 'ENTREGA') {
+    var entregaFiltrado = (fatDadosObj.entrega || []).filter(c => !busca || c.toLowerCase().indexOf(busca) > -1);
+    if (entregaFiltrado.length > 0) {
+      html += '<div class="card"><div class="card-title" style="color:#ef4444">🚚 ENTREGA (' + entregaFiltrado.length + ')</div>';
+      entregaFiltrado.forEach(function(c) {
+        html += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;font-weight:700;color:#fff">' + c + '</div>';
+      });
+      html += '</div>';
+    }
+  }
+  if (filtroCat === 'TODAS' || filtroCat === 'AVISOS') {
+    var avisosFiltrados = (fatDadosObj.avisos || []).filter(c => !busca || c.toLowerCase().indexOf(busca) > -1);
+    if (avisosFiltrados.length > 0) {
+      html += '<div class="card" style="border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.08);"><div class="card-title" style="color:#f87171;font-size:12px;font-weight:900">⚠️ AVISOS E INSTRUÇÕES (' + avisosFiltrados.length + ')</div>';
+      avisosFiltrados.forEach(function(c) {
+        html += '<div style="padding:10px;margin-bottom:6px;background:rgba(0,0,0,0.4);border-radius:10px;border-left:3px solid #ef4444;font-size:12px;font-weight:800;color:#fca5a5;line-height:1.4">' + c + '</div>';
+      });
+      html += '</div>';
+    }
+  }
+  if (html === '') {
+    html = '<div class="card empty">Nenhum cliente de faturamento encontrado para os filtros selecionados.</div>';
+  }
+  container.innerHTML = html;
 };
 
 window.renderListaVencClientes = function() {
   var container = document.getElementById('lista-venc-cliente');
   if (!container) return;
-
+  
   var busca = (document.getElementById('venc-cli-search').value || '').toLowerCase().trim();
   var filtroCat = document.getElementById('venc-cli-filter-cat').value;
   var dtDe = document.getElementById('venc-cli-dt-de').value;
   var dtAte = document.getElementById('venc-cli-dt-ate').value;
-
+  
   var hoje = new Date();
   hoje.setHours(0,0,0,0);
 
   var filtrados = (vencClientesList || []).filter(function(item) {
-    var matchBusca = !busca ||
-      (item.nome || '').toLowerCase().indexOf(busca) > -1 ||
+    var matchBusca = !busca || 
+      (item.nome || '').toLowerCase().indexOf(busca) > -1 || 
       (item.observacao || '').toLowerCase().indexOf(busca) > -1;
-
+    
     var status = 'PENDENTE';
-    var dtRefStr = item.dataVencAte || item.dataVenc;
-    if (dtRefStr) {
-      var parts = dtRefStr.split('/');
+    var diffDias = null;
+    if (item.dataVenc) {
+      var parts = item.dataVenc.split('/');
       if (parts.length === 3) {
         var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
-        var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
+        diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
         if (diffDias < 0) status = 'VENCIDO';
         else if (diffDias === 0) status = 'DIAADIA';
         else if (diffDias <= 7) status = 'QUASE';
@@ -2626,35 +2327,19 @@ window.renderListaVencClientes = function() {
     }
 
     var matchCat = (filtroCat === 'TODAS') || (status === filtroCat);
-
+    
     var matchData = true;
-    var cStart = null, cEnd = null;
-
-    if (item.dataVenc) {
-      var p1 = item.dataVenc.split('/');
-      if (p1.length === 3) cStart = new Date(p1[2], p1[1] - 1, p1[0]);
+    if (dtDe && item.dataVenc) {
+      var parts = item.dataVenc.split('/');
+      var d = new Date(parts[2], parts[1] - 1, parts[0]);
+      var dDe = new Date(dtDe.split('-')[0], dtDe.split('-')[1] - 1, dtDe.split('-')[2]);
+      if (d < dDe) matchData = false;
     }
-    if (item.dataVencAte) {
-      var p2 = item.dataVencAte.split('/');
-      if (p2.length === 3) cEnd = new Date(p2[2], p2[1] - 1, p2[0]);
-    }
-
-    if (!cStart) cStart = cEnd;
-    if (!cEnd) cEnd = cStart;
-
-    if (cStart && cEnd) {
-      if (dtDe) {
-        var pDe = dtDe.split('-');
-        var fStart = new Date(pDe[0], pDe[1] - 1, pDe[2]);
-        if (cEnd < fStart) matchData = false;
-      }
-      if (dtAte && matchData) {
-        var pAte = dtAte.split('-');
-        var fEnd = new Date(pAte[0], pAte[1] - 1, pAte[2]);
-        if (cStart > fEnd) matchData = false;
-      }
-    } else if (dtDe || dtAte) {
-      matchData = false;
+    if (dtAte && item.dataVenc && matchData) {
+      var parts = item.dataVenc.split('/');
+      var d = new Date(parts[2], parts[1] - 1, parts[0]);
+      var dAte = new Date(dtAte.split('-')[0], dtAte.split('-')[1] - 1, dtAte.split('-')[2]);
+      if (d > dAte) matchData = false;
     }
 
     return matchBusca && matchCat && matchData;
@@ -2670,13 +2355,12 @@ window.renderListaVencClientes = function() {
   exibidos.forEach(function(item) {
     var badgeClass = 'b-ok';
     var statusTxt = 'Dia a Dia / Hoje';
-    var dtRefStr = item.dataVencAte || item.dataVenc;
-
-    if (dtRefStr) {
-      var parts = dtRefStr.split('/');
+    
+    if (item.dataVenc) {
+      var parts = item.dataVenc.split('/');
       var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
       var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
-
+      
       if (diffDias < 0) {
         badgeClass = 'b-falta';
         statusTxt = 'VENCIDO (' + Math.abs(diffDias) + ' dias)';
@@ -2695,22 +2379,13 @@ window.renderListaVencClientes = function() {
       statusTxt = 'SEM DATA DEFINIDA';
     }
 
-    var strVenc = 'Não informado';
-    if (item.dataVenc && item.dataVencAte) {
-      strVenc = item.dataVenc + ' <span style="color:#fbbf24;font-weight:800;">até</span> ' + item.dataVencAte;
-    } else if (item.dataVenc) {
-      strVenc = item.dataVenc;
-    } else if (item.dataVencAte) {
-      strVenc = 'Até ' + item.dataVencAte;
-    }
-
     html += '<div class="card" style="margin-bottom:10px;padding:14px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
         '<span class="badge-status ' + badgeClass + '">' + statusTxt + '</span>' +
         '<button class="btn-qty" onclick="abrirModalVencCliente(\'' + item.id + '\')" title="Definir Data de Vencimento" style="background:rgba(245,158,11,0.15);color:#fbbf24;border-color:rgba(245,158,11,0.3);width:34px;height:34px;font-size:14px;">📅</button>' +
       '</div>' +
       '<div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px;">' + item.nome + '</div>' +
-      '<div style="font-size:12px;color:#cbd5e1;margin-bottom:4px;">Vencimento: <strong>' + strVenc + '</strong></div>' +
+      '<div style="font-size:12px;color:#cbd5e1;margin-bottom:4px;">Vencimento: <strong>' + (item.dataVenc || 'Não informado') + '</strong></div>' +
       (item.observacao ? '<div style="font-size:11px;color:#38bdf8;background:rgba(56,189,248,0.08);padding:8px;border-radius:8px;border-left:3px solid #38bdf8;"><strong>Obs:</strong> ' + item.observacao + '</div>' : '') +
     '</div>';
   });
@@ -2730,131 +2405,381 @@ window.renderListaVencClientes = function() {
   }
 };
 
-// ============================================
-// ADMINISTRAÇÃO E GESTÃO
-// ============================================
-window.carregarSolicitacoesPendentes = function() {
-  var loadEl = document.getElementById('load-admin');
-  if (loadEl) loadEl.style.display = 'block';
-
-  google.script.run.withSuccessHandler(function(lista) {
-    if (loadEl) loadEl.style.display = 'none';
-    var container = document.getElementById('admin-pending-list');
-
-    if (!lista || lista.length === 0) {
-      container.innerHTML = '<div class="card empty">Nenhuma solicitação pendente no momento.</div>';
-      return;
-    }
-
-    var html = '';
-    lista.forEach(function(item) {
-      html += '<div class="card">' +
-        '<div style="font-size:15px;font-weight:800;color:#fff;margin-bottom:4px">' + item.nome + '</div>' +
-        '<div style="font-size:12px;color:#cbd5e1;margin-bottom:8px">Função: <strong>' + item.funcao + '</strong> | Local: <strong>' + item.local + '</strong></div>' +
-        '<div style="font-size:12px;color:#cbd5e1;margin-bottom:12px">Tel: <strong>' + item.telefone + '</strong> | Solicitado: ' + item.dataHora + '</div>' +
-        '<div class="row">' +
-          '<input class="input" id="adm-u-' + item.id + '" placeholder="Usuário (ex: marlon)" style="flex:1">' +
-          '<input class="input" id="adm-p-' + item.id + '" placeholder="Senha" style="flex:1">' +
-        '</div>' +
-        '<div class="card-title" style="margin-top:6px;margin-bottom:4px">PERMISSÕES DE ACESSO</div>' +
-        '<div class="checkbox-group">' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-cont-' + item.id + '" checked> Contagem</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-cad-' + item.id + '" checked> Cadastrar</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-rel-' + item.id + '" checked> Relatórios</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-not-' + item.id + '" checked> Notificações</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-val-' + item.id + '" checked> Validades</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-car-' + item.id + '"> Cartaz Promoção</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-nf-' + item.id + '"> Notas Fiscais</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-oc-' + item.id + '"> Ordem de Compra</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-ges-' + item.id + '"> Gestão de Controle</label>' +
-          '<label class="checkbox-item"><input type="checkbox" id="p-venc-' + item.id + '"> Venc. Clientes</label>' +
-        '</div>' +
-        '<button class="btn-save" onclick="window.aprovarSolicitacaoUser(\'' + item.id + '\')" style="margin-top:10px">Aprovar e Criar Acesso</button>' +
-      '</div>';
-    });
-
-    container.innerHTML = html;
-  }).getSolicitacoesPendentes();
+window.abrirModalVencCliente = function(id) {
+  var cli = (vencClientesList || []).find(function(c){ return String(c.id) === String(id); });
+  if (!cli) return;
+  
+  document.getElementById('vc-cliente-id').value = cli.id;
+  document.getElementById('vc-cliente-nome').textContent = cli.nome;
+  document.getElementById('vc-dt-venc').value = '';
+  document.getElementById('vc-obs').value = cli.observacao || '';
+  document.getElementById('modal-venc-cliente-edit').style.display = 'flex';
 };
 
-window.aprovarSolicitacaoUser = function(id) {
-  var u = document.getElementById('adm-u-' + id).value.trim();
-  var p = document.getElementById('adm-p-' + id).value.trim();
+window.alternarFormModalAddNF = function() {
+  var tipo = document.getElementById('add-nf-tipo').value;
+  document.getElementById('form-group-nf').style.display = tipo === 'NF' ? 'block' : 'none';
+  document.getElementById('form-group-fat').style.display = tipo === 'FAT' ? 'block' : 'none';
+  if (tipo === 'FAT') {
+    document.getElementById('group-fat-resp').style.display = document.getElementById('add-fat-cat').value === 'CAIXA' ? 'block' : 'none';
+  }
+};
+// HISTÓRICO DE RELATÓRIOS
+window.carregarHistorico = function() {
+  document.getElementById('load-historico').style.display = 'block';
+  document.getElementById('historico-list').innerHTML = '';
+  google.script.run.withSuccessHandler(function(dados) {
+      document.getElementById('load-historico').style.display = 'none';
+      historicoSalvoData = dados || []; window.renderHistorico();
+    }).withFailureHandler(function(err) { document.getElementById('load-historico').style.display = 'none'; window.toast('Erro ao carregar histórico.', 'er'); }).getHistoricoAgrupado();
+};
 
-  if (!u || !p) { window.toast('Defina usuário e senha para aprovar!', 'er'); return; }
+window.renderHistorico = function() {
+  var container = document.getElementById('historico-list');
+  if (historicoSalvoData.length === 0) { container.innerHTML = '<div class="card empty">Você ainda não possui nenhum relatório salvo.</div>'; return; }
+  var html = '';
+  historicoSalvoData.forEach(function(rel, index) {
+    html += '<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><div><div style="font-size:11px; color:#94a3b8; font-weight:800; margin-bottom:4px">' + rel.dataHora + '</div><div style="font-size:14px; font-weight:700; color:#fff">' + rel.responsavel + '</div><div style="font-size:12px; color:#cbd5e1; margin-top:4px">Itens contados: <strong>' + rel.totalItens + '</strong></div></div><div style="display:flex; gap: 8px"><button class="btn-search-web" onclick="abrirModalAdicaoItem(' + index + ')" title="Adicionar Item" style="width:44px; height:44px; padding:0; border-radius:12px; background:linear-gradient(135deg, #10b981, #059669);">➕</button><button class="btn-search-web" onclick="recalcularRelatorioAntigo(' + index + ')" title="Atualizar Estoque Ideal pelo Cache" style="width:44px; height:44px; padding:0; border-radius:12px; background:linear-gradient(135deg, #f59e0b, #d97706);">🔄</button><button class="btn-search-web" onclick="abrirRelatorioAntigo(' + index + ')" title="Visualizar Relatório" style="width:44px; height:44px; padding:0; border-radius:12px;">📄</button></div></div></div>';
+  });
+  container.innerHTML = html;
+};
 
-  var perms = [];
-  if (document.getElementById('p-cont-' + id).checked) perms.push('contagem');
-  if (document.getElementById('p-cad-' + id).checked) perms.push('cadastrar');
-  if (document.getElementById('p-rel-' + id).checked) perms.push('relatorio');
-  if (document.getElementById('p-not-' + id).checked) perms.push('notif');
-  if (document.getElementById('p-val-' + id).checked) perms.push('validade');
-  if (document.getElementById('p-car-' + id).checked) perms.push('cartaz');
-  if (document.getElementById('p-nf-' + id).checked) perms.push('notafiscal');
-  if (document.getElementById('p-oc-' + id).checked) perms.push('ordemcompra');
-  if (document.getElementById('p-ges-' + id).checked) perms.push('gestao');
-  if (document.getElementById('p-venc-' + id).checked) perms.push('vencclientes');
+window.abrirRelatorioAntigo = function(index) { var rel = historicoSalvoData[index]; if (rel) window.exibirModalRelatorio(rel); };
+window.recalcularRelatorioAntigo = function(index) {
+  var rel = historicoSalvoData[index]; if (!rel) return;
+  if (confirm('Deseja atualizar os valores "Ideais" deste relatório usando a base atual do sistema?\nIsso alterará as diferenças (Faltas/Sobras) do relatório original!')) {
+    window.toast('Recalculando relatório...', 'ok');
+    google.script.run.withSuccessHandler(function(res) { if (res && res.sucesso) { window.toast(res.mensagem, 'ok'); window.carregarHistorico(); } else { window.toast(res ? res.mensagem : 'Erro ao recalcular', 'er'); } }).withFailureHandler(function(err) { window.toast('Erro ao recalcular', 'er'); }).recalcularRelatorio(rel.dataHora);
+  }
+};
 
-  window.toast('Aprovando solicitação...', 'ok');
+window.abrirModalAdicaoItem = function(index) {
+  relatorioAtivoAdicao = historicoSalvoData[index]; if (!relatorioAtivoAdicao) return;
+  document.getElementById('add-item-sub').textContent = 'Relatório: ' + relatorioAtivoAdicao.dataHora;
+  document.getElementById('modal-add-item').style.display = 'flex';
+  document.getElementById('search-add-item').value = '';
+  
+  if (produtosContagem.length === 0) {
+    document.getElementById('lista-add-item').innerHTML = '<div class="loading"><div class="spin"></div>Carregando base...</div>';
+    google.script.run.withSuccessHandler(function(dados) { 
+      produtosContagem = (dados || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '')).toLowerCase();
+        return p;
+      });
+      window.renderListaAdicaoItem(); 
+    }).getProdutos();
+  } else { window.renderListaAdicaoItem(); }
+};
 
+window.renderListaAdicaoItem = function() {
+  var container = document.getElementById('lista-add-item');
+  if (!container) return;
+  var inputEl = document.getElementById('search-add-item');
+  var busca = (inputEl ? inputEl.value : '').toLowerCase().trim();
+
+  if (!produtosContagem || produtosContagem.length === 0) {
+    container.innerHTML = '<div class="empty">Nenhum produto no Cache.</div>';
+    return;
+  }
+
+  var filtrados = produtosContagem.filter(function(p) {
+    if (!p) return false;
+    return !busca || (p._s && p._s.indexOf(busca) > -1);
+  });
+
+  if (filtrados.length === 0) {
+    container.innerHTML = '<div class="empty">Nenhum produto encontrado.</div>';
+    return;
+  }
+
+  var html = '';
+  filtrados.slice(0, 40).forEach(function(p) {
+    var imgHtml = (p.fotoUrl && p.fotoUrl !== 'NOT_FOUND') ? '<img src="' + p.fotoUrl + '" alt="foto">' : '📦';
+    var thumbDiv = '<div class="prod-thumb" style="width:36px;height:36px;font-size:16px">' + imgHtml + '</div>';
+    html += '<div class="prod-item" style="padding:8px 0">' + thumbDiv + '<div class="prod-info"><div class="prod-name" style="font-size:12px">' + p.nome + '</div><div class="prod-meta">ID: ' + p.id + ' | Ideal: ' + p.estoqueIdeal + '</div></div><div class="prod-counter" style="gap:4px"><input class="qty-input" id="add-qty-' + p.id + '" type="number" min="0" style="width:40px;height:32px;font-size:12px" placeholder="Qtd"><button class="btn-save" onclick="salvarItemAdicional(\'' + p.id + '\')" style="width:auto;height:32px;padding:0 12px;margin:0;font-size:12px;border-radius:8px">OK</button></div></div>';
+  });
+  container.innerHTML = html;
+};
+
+window.salvarItemAdicional = function(idProduto) {
+  if (!relatorioAtivoAdicao) return;
+  var qtdInput = document.getElementById('add-qty-' + idProduto);
+  var qtdVal = parseInt(qtdInput.value);
+  if (isNaN(qtdVal) || qtdVal < 0) { window.toast('Digite uma quantidade válida!', 'er'); return; }
+  window.toast('Injetando item...', 'ok');
+  
   google.script.run
     .withSuccessHandler(function(res) {
-      window.toast(res ? res.mensagem : 'Usuário aprovado!', (res && res.sucesso) ? 'ok' : 'er');
-      window.carregarSolicitacoesPendentes();
+      if (res && res.sucesso) { window.toast(res.mensagem, 'ok'); qtdInput.value = ''; document.getElementById('modal-add-item').style.display = 'none'; window.carregarHistorico(); } 
+      else { window.toast(res ? res.mensagem : 'Erro ao injetar', 'er'); }
     })
-    .aprovarSolicitacao(id, u, p, perms);
+    .withFailureHandler(function(err) { window.toast('Erro.', 'er'); })
+    .adicionarItemAoRelatorio(relatorioAtivoAdicao.dataHora, idProduto, qtdVal, relatorioAtivoAdicao.responsavel);
 };
 
-window.carregarUsuariosAdmin = function() {
-  var loadEl = document.getElementById('load-users');
-  if (loadEl) loadEl.style.display = 'block';
+// VALIDADES E VENCIMENTOS
+window.abrirModalValidadeDireta = function(id) {
+  var prod = produtosContagem.find(function(p){ return String(p.id) === String(id); });
+  if (!prod) return;
+  
+  document.getElementById('qv-prod-id').value = id;
+  document.getElementById('qv-prod-nome').textContent = prod.nome;
+  document.getElementById('qv-dt-venc').value = '';
+  document.getElementById('qv-qtd').value = contagensAtuais[id] || 1;
+  document.getElementById('qv-lote').value = '';
+  document.getElementById('modal-quick-validade').style.display = 'flex';
+};
 
-  google.script.run.withSuccessHandler(function(lista) {
-    adminUsuariosList = lista || [];
-    if (loadEl) loadEl.style.display = 'none';
-    var container = document.getElementById('admin-user-list');
+window.carregarValidades = function() {
+  document.getElementById('load-validades').style.display = 'block';
+  document.getElementById('lista-validades').innerHTML = '';
+  
+  if (produtosContagem.length === 0) {
+    google.script.run.withSuccessHandler(function(prods) {
+      produtosContagem = (prods || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '')).toLowerCase();
+        p._c = (p.categoria || 'GERAL').toUpperCase();
+        return p;
+      });
+      window.popularSelectValidades();
+    }).getProdutos();
+  } else {
+    window.popularSelectValidades();
+  }
+  google.script.run.withSuccessHandler(function(dados) {
+    document.getElementById('load-validades').style.display = 'none';
+    validadesData = dados || [];
+    window.atualizarMapaValidades();
+    window.renderListaValidades();
+  }).withFailureHandler(function(err) {
+    document.getElementById('load-validades').style.display = 'none';
+    window.toast('Erro ao carregar validades.', 'er');
+  }).getValidades();
+};
 
-    if (!adminUsuariosList || adminUsuariosList.length === 0) {
-      container.innerHTML = '<div class="card empty">Nenhum usuário cadastrado.</div>';
-      return;
+window.popularSelectValidades = function() {
+  var selProd = document.getElementById('val-select-prod');
+  var selCat = document.getElementById('val-filter-cat');
+  var busca = (document.getElementById('val-search-input').value || '').toLowerCase().trim();
+  var catFiltro = selCat ? selCat.value : 'TODAS';
+  
+  if (selCat && selCat.options.length <= 1 && produtosContagem.length > 0) {
+    var categorias = new Set();
+    produtosContagem.forEach(function(p) { if (p.categoria) categorias.add(p.categoria.toUpperCase()); });
+    var cHtml = '<option value="TODAS">Todas as Categorias</option>';
+    categorias.forEach(function(cat) { cHtml += '<option value="' + cat + '">' + cat + '</option>'; });
+    selCat.innerHTML = cHtml;
+    selCat.value = catFiltro;
+  }
+
+  var filtrados = produtosContagem.filter(function(p) {
+    var matchBusca = !busca || p._s.indexOf(busca) > -1;
+    var matchCat = (catFiltro === 'TODAS') || (p._c === catFiltro);
+    return matchBusca && matchCat;
+  });
+  
+  var html = '<option value="" disabled selected>Selecione um Produto (' + filtrados.length + ')...</option>';
+  filtrados.slice(0, 100).forEach(function(p) {
+    html += '<option value="' + p.id + '">' + p.nome + ' (ID: ' + p.id + ')</option>';
+  });
+  selProd.innerHTML = html;
+};
+
+window.renderListaValidades = function() {
+  var container = document.getElementById('lista-validades');
+  if (validadesData.length === 0) {
+    container.innerHTML = '<div class="empty">Nenhum vencimento cadastrado no momento.</div>';
+    return;
+  }
+  var hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  var html = '';
+  validadesData.forEach(function(item) {
+    var parts = item.dataVenc.split('/');
+    var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
+    var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
+    var badgeClass = 'b-ok';
+    var statusTxt = 'Vence em ' + diffDias + ' dias';
+    if (diffDias < 0) {
+      badgeClass = 'b-falta';
+      statusTxt = 'VENCIDO (' + Math.abs(diffDias) + ' dias)';
+    } else if (diffDias <= 30) {
+      badgeClass = 'b-sobra';
+      statusTxt = 'ALERTA: ' + diffDias + ' dias p/ vencer';
     }
-
-    var html = '';
-    adminUsuariosList.forEach(function(u) {
-      var badgeClass = u.status === 'APROVADO' ? 'b-ok' : 'b-falta';
-
-      html += '<div class="card" style="padding:14px;margin-bottom:10px;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-          '<div style="font-size:14px;font-weight:800;color:#fff;">' + u.nome + ' (@' + u.usuario + ')</div>' +
-          '<span class="badge-status ' + badgeClass + '">' + u.status + '</span>' +
+    html += '<div class="list-item" style="align-items:flex-start">' +
+      '<div style="flex:1">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+          '<span class="badge-status ' + badgeClass + '">' + statusTxt + '</span>' +
+          '<span style="font-size:11px;color:#94a3b8">Qtd: <strong>' + item.quantidade + '</strong></span>' +
         '</div>' +
-        '<div style="font-size:12px;color:#cbd5e1;margin-bottom:8px;">Função: ' + u.funcao + ' | Local: ' + u.local + '</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">' +
-          '<button class="btn" onclick="window.abrirModalPerfil(\'' + u.id + '\')" style="padding:6px 10px;font-size:11px;background:linear-gradient(135deg,#3b82f6,#1d4ed8)">⚙️ Permissões</button>' +
-          '<button class="btn" onclick="window.alterarStatusAdmin(\'' + u.id + '\', \'' + (u.status === 'APROVADO' ? 'INATIVO' : 'APROVADO') + '\')" style="padding:6px 10px;font-size:11px;background:rgba(245,158,11,0.2);color:#fbbf24;border:1px solid rgba(245,158,11,0.3)">' + (u.status === 'APROVADO' ? '🚫 Desativar' : '✅ Ativar') + '</button>' +
-          '<button class="btn" onclick="window.resetarSenhaAdmin(\'' + u.id + '\')" style="padding:6px 10px;font-size:11px;background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.3)">🔑 Redefinir Senha</button>' +
-        '</div>' +
-      '</div>';
-    });
-
-    container.innerHTML = html;
-  }).getUsuariosAtivos();
+        '<div style="font-weight:700;color:#fff;font-size:13px">' + item.nome + '</div>' +
+        '<div style="font-size:11px;color:#cbd5e1;margin-top:2px">Vencimento: <strong>' + item.dataVenc + '</strong>' + (item.lote ? ' | Lote: ' + item.lote : '') + '</div>' +
+      '</div>' +
+      '<button class="del" onclick="deletarValidade(' + item.row + ')" title="Excluir Validade">&#x2715;</button>' +
+    '</div>';
+  });
+  container.innerHTML = html;
 };
 
-window.abrirModalPerfil = function(id) {
-  var u = adminUsuariosList.find(function(item){ return String(item.id) === String(id); });
-  if (!u) return;
+window.deletarValidade = function(row) {
+  if (confirm('Deseja remover este registro de validade?')) {
+    window.toast('Removendo...', 'ok');
+    google.script.run.withSuccessHandler(function(res) {
+      window.toast(res ? res.mensagem : 'Processado', res && res.sucesso ? 'ok' : 'er');
+      if (res && res.sucesso) window.carregarValidades();
+    }).removerValidade(row);
+  }
+};
 
+// CARTAZ DE PROMOÇÃO
+window.prepararTelaCartaz = function() {
+  if (produtosContagem.length === 0) {
+    google.script.run.withSuccessHandler(function(prods) {
+      produtosContagem = (prods || []).map(function(p) {
+        p._s = ((p.nome || '') + ' ' + (p.id || '') + ' ' + (p.codBarra || '')).toLowerCase();
+        p._c = (p.categoria || 'GERAL').toUpperCase();
+        return p;
+      });
+      window.popularSelectCartaz();
+    }).getProdutos();
+  } else {
+    window.popularSelectCartaz();
+  }
+};
+
+window.popularSelectCartaz = function() {
+  var selProd = document.getElementById('cartaz-select-prod');
+  var selCat = document.getElementById('cartaz-filter-cat');
+  var busca = (document.getElementById('cartaz-search').value || '').toLowerCase().trim();
+  var catFiltro = selCat ? selCat.value : 'TODAS';
+  
+  if (selCat && selCat.options.length <= 1 && produtosContagem.length > 0) {
+    var categorias = new Set();
+    produtosContagem.forEach(function(p) { if (p.categoria) categorias.add(p.categoria.toUpperCase()); });
+    var cHtml = '<option value="TODAS">Todas as Categorias</option>';
+    categorias.forEach(function(cat) { cHtml += '<option value="' + cat + '">' + cat + '</option>'; });
+    selCat.innerHTML = cHtml;
+    selCat.value = catFiltro;
+  }
+
+  var filtrados = produtosContagem.filter(function(p) {
+    var matchBusca = !busca || p._s.indexOf(busca) > -1;
+    var matchCat = (catFiltro === 'TODAS') || (p._c === catFiltro);
+    return matchBusca && matchCat;
+  });
+  
+  var html = '<option value="" disabled selected>Selecione um Produto (' + filtrados.length + ')...</option>';
+  filtrados.slice(0, 100).forEach(function(p) {
+    html += '<option value="' + p.id + '">' + p.nome + '</option>';
+  });
+  selProd.innerHTML = html;
+};
+
+window.atualizarPreviewCartaz = function() {
+  var nomeInput = document.getElementById('cartaz-prod-name');
+  var precoInput = document.getElementById('cartaz-prod-price');
+  if (!nomeInput || !precoInput) return;
+  
+  var nome = (nomeInput.value || 'REFRI SPRITE PET 600ML').toUpperCase();
+  var precoStr = (precoInput.value || '5,00').replace('.', ',');
+  
+  var titleEl = document.getElementById('prev-prod-title');
+  if (titleEl) titleEl.textContent = nome;
+  
+  var partes = precoStr.split(',');
+  var intPart = partes[0] || '0';
+  var decPart = ',' + (partes[1] ? (partes[1] + '00').slice(0, 2) : '00');
+  
+  var intEl = document.getElementById('prev-price-int');
+  var decEl = document.getElementById('prev-price-dec');
+  if (intEl) intEl.textContent = intPart;
+  if (decEl) decEl.textContent = decPart;
+};
+
+// TELAS DE ADM
+window.carregarUsuariosAdmin = function() {
+  document.getElementById('load-users').style.display = 'block'; 
+  document.getElementById('admin-user-list').innerHTML = '';
+  
+  google.script.run
+    .withSuccessHandler(function(lista){
+      document.getElementById('load-users').style.display = 'none'; 
+      if (!lista || lista.sucesso === false) {
+        window.toast(lista ? lista.mensagem : 'Erro de permissão', 'er');
+        return;
+      }
+      adminUsuariosList = lista || [];
+      var container = document.getElementById('admin-user-list');
+      
+      if(!adminUsuariosList || adminUsuariosList.length === 0) { 
+        container.innerHTML = '<div class="card empty">Nenhum usuário ativo.</div>'; 
+        return; 
+      }
+      
+      var html = '';
+      adminUsuariosList.forEach(function(u, idx){
+        var corStatus = u.status === 'APROVADO' ? '#34d399' : '#f87171';
+        html += '<div class="card card-clickable" onclick="abrirPerfilUsuario(' + idx + ')">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+            '<div><div class="prod-name" style="font-size:15px;color:#818cf8;">' + u.nome + ' (' + u.usuario + ') 🔍</div><div class="prod-meta">Função: ' + u.funcao + ' | ID: ' + u.id + '</div></div>' +
+            '<div style="font-size:11px;font-weight:800;color:'+corStatus+';padding:4px 8px;background:rgba(255,255,255,0.05);border-radius:6px">' + u.status + '</div>' +
+          '</div>' +
+          '<div class="row" onclick="event.stopPropagation()">' +
+            '<button class="btn btn-reset-senha" data-id="' + u.id + '" style="flex:1;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3)">Resetar Senha</button>';
+            
+        if (u.status === 'APROVADO') {
+          html += '<button class="btn btn-status-user" data-id="' + u.id + '" data-status="INATIVO" style="flex:1;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3)">Bloquear</button>';
+        } else { 
+          html += '<button class="btn btn-status-user" data-id="' + u.id + '" data-status="APROVADO" style="flex:1;background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3)">Ativar</button>';
+        }
+        html += '</div></div>';
+      });
+      container.innerHTML = html;
+      
+      container.querySelectorAll('.btn-reset-senha').forEach(function(btn){ 
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          var userId = this.getAttribute('data-id'); 
+          var novaSenha = prompt('Nova senha:'); 
+          if(!novaSenha) return; 
+          google.script.run.withSuccessHandler(function(res){ window.toast(res ? res.mensagem : 'Senha resetada', res && res.sucesso ? 'ok' : 'er'); }).resetarSenhaUsuario(userId, novaSenha, usuarioLogado ? usuarioLogado.usuario : ''); 
+        }); 
+      });
+      
+      container.querySelectorAll('.btn-status-user').forEach(function(btn){ 
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          var userId = this.getAttribute('data-id'); 
+          var novoStatus = this.getAttribute('data-status'); 
+          if(confirm('Mudar status para ' + novoStatus + '?')) { 
+            google.script.run.withSuccessHandler(function(res){ 
+              window.toast(res ? res.mensagem : 'Status alterado', res && res.sucesso ? 'ok' : 'er'); 
+              if(res && res.sucesso) window.carregarUsuariosAdmin(); 
+            }).alterarStatusUsuario(userId, novoStatus, usuarioLogado ? usuarioLogado.usuario : ''); 
+          } 
+        }); 
+      });
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-users').style.display = 'none';
+      window.toast('Erro ao carregar usuários.', 'er');
+    })
+    .getUsuariosAtivos(usuarioLogado ? usuarioLogado.usuario : '');
+};
+
+window.abrirPerfilUsuario = function(idx) {
+  var u = adminUsuariosList[idx];
+  if(!u) return;
   document.getElementById('prof-user-id').value = u.id;
+  document.getElementById('prof-avatar').textContent = u.nome ? u.nome.charAt(0).toUpperCase() : 'U';
   document.getElementById('prof-nome').textContent = u.nome;
   document.getElementById('prof-login').textContent = '@' + u.usuario;
-  document.getElementById('prof-avatar').textContent = u.nome ? u.nome.charAt(0).toUpperCase() : 'U';
   document.getElementById('prof-id').textContent = u.id;
-  document.getElementById('prof-funcao').textContent = u.funcao || 'Não informada';
+  document.getElementById('prof-funcao').textContent = u.funcao || 'Operador';
   document.getElementById('prof-local').textContent = u.local || 'Geral';
   document.getElementById('prof-telefone').textContent = u.telefone || 'Não informado';
-
-  var perms = (u.permissoes || '').split(',');
+  var perms = (u.permissoes || '').split(',').map(p => p.trim());
   document.getElementById('prof-p-contagem').checked = perms.indexOf('contagem') > -1;
   document.getElementById('prof-p-cadastrar').checked = perms.indexOf('cadastrar') > -1;
   document.getElementById('prof-p-relatorio').checked = perms.indexOf('relatorio') > -1;
@@ -2865,65 +2790,171 @@ window.abrirModalPerfil = function(id) {
   document.getElementById('prof-p-ordemcompra').checked = perms.indexOf('ordemcompra') > -1;
   document.getElementById('prof-p-gestao').checked = perms.indexOf('gestao') > -1;
   document.getElementById('prof-p-vencclientes').checked = perms.indexOf('vencclientes') > -1;
-
   document.getElementById('modal-perfil-user').style.display = 'flex';
 };
 
-window.alterarStatusAdmin = function(id, novoStatus) {
-  if (!confirm('Deseja mudar o status deste usuário para ' + novoStatus + '?')) return;
-  window.toast('Atualizando status...', 'ok');
-
-  google.script.run.withSuccessHandler(function(res) {
-    window.toast(res ? res.mensagem : 'Status atualizado!', 'ok');
-    window.carregarUsuariosAdmin();
-  }).alterarStatusUsuario(id, novoStatus, usuarioLogado ? usuarioLogado.usuario : '');
-};
-
-window.resetarSenhaAdmin = function(id) {
-  var novaSenha = prompt('Digite a nova senha para este usuário:');
-  if (!novaSenha || !novaSenha.trim()) return;
-
-  window.toast('Redefinindo senha...', 'ok');
-
-  google.script.run.withSuccessHandler(function(res) {
-    window.toast(res ? res.mensagem : 'Senha redefinida!', 'ok');
-  }).resetarSenhaUsuario(id, novaSenha.trim(), usuarioLogado ? usuarioLogado.usuario : '');
-};
-
 window.carregarLogsAdmin = function() {
-  var loadEl = document.getElementById('load-logs');
-  if (loadEl) loadEl.style.display = 'block';
-
-  google.script.run.withSuccessHandler(function(logs) {
-    if (loadEl) loadEl.style.display = 'none';
-    var container = document.getElementById('admin-logs-list');
-
-    if (!logs || logs.length === 0) {
-      container.innerHTML = '<div class="card empty">Nenhum log registrado no sistema.</div>';
-      return;
-    }
-
-    var html = '';
-    logs.forEach(function(l) {
-      html += '<div class="log-item">' +
-        '<div class="log-date">' + l.data + ' — ' + l.usuario + '</div>' +
-        '<div style="font-weight:800;color:#fff;margin-bottom:2px;">' + l.acao + '</div>' +
-        '<div class="log-detail">' + l.detalhes + '</div>' +
-      '</div>';
-    });
-
-    container.innerHTML = html;
-  }).getLogsAuditoria();
+  document.getElementById('load-logs').style.display = 'block'; 
+  document.getElementById('admin-logs-list').innerHTML = '';
+  
+  google.script.run
+    .withSuccessHandler(function(logs){
+      document.getElementById('load-logs').style.display = 'none'; 
+      var container = document.getElementById('admin-logs-list');
+      
+      if(!logs || logs.length === 0) { 
+        container.innerHTML = '<div class="card empty">Sem registros.</div>'; 
+        return; 
+      }
+      var html = '';
+      logs.forEach(function(l){ 
+        html += '<div class="log-item"><div style="display:flex;justify-content:space-between"><span class="log-date">' + l.acao + '</span><span style="color:#64748b;font-size:10px">' + l.data + '</span></div><div class="log-detail"><strong>Por:</strong> ' + l.usuario + '<br>' + l.detalhes + '</div></div>'; 
+      });
+      container.innerHTML = html;
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-logs').style.display = 'none';
+      window.toast('Erro ao carregar logs.', 'er');
+    })
+    .getLogsAuditoria();
 };
 
-safeAddEvent('btn-sync-fotos', 'click', function() {
-  if (!confirm('Deseja sincronizar as fotos dos produtos com a base pública da internet agora?')) return;
-  window.toast('Iniciando sincronização de fotos...', 'ok');
+window.carregarSolicitacoesPendentes = function() {
+  document.getElementById('load-admin').style.display = 'block'; 
+  document.getElementById('admin-pending-list').innerHTML = '';
+  
+  google.script.run
+    .withSuccessHandler(function(lista){
+      document.getElementById('load-admin').style.display = 'none'; 
+      var container = document.getElementById('admin-pending-list');
+      if(!lista || lista.length === 0) { container.innerHTML = '<div class="card empty">Sem solicitações.</div>'; return; }
+      var html = '';
+      lista.forEach(function(item){
+        var uG = window.gerarCodigoAleatorio('P'), sG = window.gerarCodigoAleatorio('O');
+        html += '<div class="card"><div class="card-title">SOLICITAÇÃO DE ' + item.nome.toUpperCase() + '</div><div style="font-size:12px;color:#cbd5e1;margin-bottom:10px"><div><strong>Função:</strong> ' + item.funcao + '</div><div><strong>Local:</strong> ' + item.local + '</div><div><strong>Telefone:</strong> ' + item.telefone + '</div><div><strong>Data:</strong> ' + item.dataHora + '</div></div><div class="row"><input class="input" id="u-' + item.id + '" value="' + uG + '" placeholder="Usuário" style="flex:1"><input class="input" id="s-' + item.id + '" value="' + sG + '" placeholder="Senha" style="flex:1"></div><div class="card-title" style="margin-top:8px">LIBERAR BOTÕES:</div><div class="checkbox-group"><label class="checkbox-item"><input type="checkbox" id="p-cont-' + item.id + '" checked> Contagem</label><label class="checkbox-item"><input type="checkbox" id="p-cad-' + item.id + '"> Cadastrar</label><label class="checkbox-item"><input type="checkbox" id="p-rel-' + item.id + '" checked> Relatórios</label><label class="checkbox-item"><input type="checkbox" id="p-notif-' + item.id + '" checked> Notificações</label><label class="checkbox-item"><input type="checkbox" id="p-val-' + item.id + '" checked> Validades</label><label class="checkbox-item"><input type="checkbox" id="p-cartaz-' + item.id + '" checked> Cartaz Promoção</label><label class="checkbox-item"><input type="checkbox" id="p-ordem-' + item.id + '" checked> Ordem Compra</label><label class="checkbox-item"><input type="checkbox" id="p-gestao-' + item.id + '" checked> Gestão Controle</label><label class="checkbox-item"><input type="checkbox" id="p-venccli-' + item.id + '" checked> Venc. Clientes</label></div><button class="btn-save btn-approve-user" data-id="' + item.id + '" style="margin-top:10px">Aprovar Acesso</button></div>';
+      });
+      container.innerHTML = html;
+      
+      container.querySelectorAll('.btn-approve-user').forEach(function(btn){ 
+        btn.addEventListener('click', function(){
+          var solId = this.getAttribute('data-id'); 
+          var uVal = document.getElementById('u-' + solId).value.trim(); 
+          var sVal = document.getElementById('s-' + solId).value.trim();
+          var perms = []; 
+          if(document.getElementById('p-cont-' + solId).checked) perms.push('contagem'); 
+          if(document.getElementById('p-cad-' + solId).checked) perms.push('cadastrar'); 
+          if(document.getElementById('p-rel-' + solId).checked) perms.push('relatorio'); 
+          if(document.getElementById('p-notif-' + solId).checked) perms.push('notif');
+          if(document.getElementById('p-val-' + solId).checked) perms.push('validade');
+          if(document.getElementById('p-cartaz-' + solId).checked) perms.push('cartaz');
+          if(document.getElementById('p-ordem-' + solId).checked) perms.push('ordemcompra');
+          if(document.getElementById('p-gestao-' + solId).checked) perms.push('gestao');
+          if(document.getElementById('p-venccli-' + solId).checked) perms.push('vencclientes');
+          
+          if(!uVal || !sVal) { window.toast('Gere usuário e senha válidos!', 'er'); return; }
+          
+          google.script.run.withSuccessHandler(function(res){ 
+            window.toast(res ? res.mensagem : 'Processado', res && res.sucesso ? 'ok' : 'er'); 
+            if (res && res.sucesso) window.carregarSolicitacoesPendentes(); 
+          }).aprovarSolicitacao(solId, uVal, sVal, perms);
+        }); 
+      });
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-admin').style.display = 'none';
+      window.toast('Erro ao carregar solicitações.', 'er');
+    })
+    .getSolicitacoesPendentes();
+};
 
-  google.script.run.withSuccessHandler(function(res) {
-    window.toast(res ? res.mensagem : 'Fotos sincronizadas!', (res && res.sucesso) ? 'ok' : 'er');
-  }).sincronizarFotosEmLote();
-});
+// DASHBOARD BI & NOTIFICAÇÕES
+window.carregarRelatorio = function() {
+  document.getElementById('load-rel').style.display = 'block';
+  document.getElementById('bi-container').style.display = 'none';
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('load-rel').style.display = 'none'; 
+      document.getElementById('bi-container').style.display = 'grid'; 
+      
+      rawBiData = data || { historico: [], dashboard: [], produtos: [] };
+      
+      var cats = new Set(), resps = new Set(); 
+      rawBiData.historico.forEach(function(h) { 
+        cats.add((h.categoria || '').toUpperCase()); 
+        resps.add(h.responsavel); 
+      });
+      
+      var cHtml='<option value="TODAS">Todas as Categorias</option>';
+      var rHtml='<option value="TODOS">Todos os Usuários</option>'; 
+      cats.forEach(function(c) { cHtml += '<option value="'+c+'">'+c+'</option>'; }); 
+      resps.forEach(function(r) { rHtml += '<option value="'+r+'">'+r+'</option>'; });
+      
+      document.getElementById('bi-filter-cat').innerHTML = cHtml; 
+      document.getElementById('bi-filter-resp').innerHTML = rHtml; 
+      
+      window.processarERenderizarBI();
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-rel').style.display = 'none'; 
+      window.toast('Erro ao carregar Dashboard.', 'er');
+    })
+    .getBIFullData();
+};
+
+window.processarERenderizarBI = function() {
+  if (!rawBiData) return;
+  var fCat = document.getElementById('bi-filter-cat').value, fResp = document.getElementById('bi-filter-resp').value, fAno = document.getElementById('bi-filter-ano').value;
+  
+  var filtrados = rawBiData.historico.filter(function(h) { 
+    var dt = h.dataHora || ''; 
+    return (fAno === 'TODOS' || dt.indexOf(fAno) !== -1) && (fCat === 'TODAS' || (h.categoria || '').toUpperCase() === fCat) && (fResp === 'TODOS' || h.responsavel === fResp); 
+  });
+  
+  var totContado = 0, totOk = 0, totDiff = 0, catsDivergentes = {}, datasAgrupadas = {};
+  
+  filtrados.forEach(function(item) { 
+    totContado += item.qtdContada; 
+    if (item.diferenca === 0) totOk++; 
+    else { 
+      totDiff++; 
+      var c = (item.categoria || 'OUTROS').toUpperCase(); 
+      catsDivergentes[c] = (catsDivergentes[c] || 0) + 1; 
+    } 
+    var dataApenas = (item.dataHora || '').split(' ')[0] || 'Geral'; 
+    datasAgrupadas[dataApenas] = (datasAgrupadas[dataApenas] || 0) + item.qtdContada; 
+  });
+  
+  document.getElementById('bi-kpi-tot-contado').textContent = totContado; 
+  document.getElementById('bi-kpi-tot-ok').textContent = totOk; 
+  document.getElementById('bi-kpi-tot-diff').textContent = totDiff; 
+  document.getElementById('bi-kpi-acuracia').textContent = (filtrados.length > 0 ? Math.round((totOk / filtrados.length) * 100) : 100) + '%';
+  
+  if (chartTrendInstance) chartTrendInstance.destroy(); 
+  chartTrendInstance = new Chart(document.getElementById('chart-trend').getContext('2d'), { type: 'line', data: { labels: Object.keys(datasAgrupadas), datasets: [{ label: 'Volume Contado', data: Object.values(datasAgrupadas), borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.15)', fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+  
+  if (chartCatInstance) chartCatInstance.destroy(); 
+  chartCatInstance = new Chart(document.getElementById('chart-cat').getContext('2d'), { type: 'doughnut', data: { labels: Object.keys(catsDivergentes), datasets: [{ data: Object.values(catsDivergentes), backgroundColor: ['#f87171', '#fbbf24', '#38bdf8', '#a78bfa', '#34d399'] }] }, options: { responsive: true, maintainAspectRatio: false } });
+};
+
+window.carregarNotificacoes = function() { 
+  document.getElementById('load-notif').style.display = 'block'; 
+  document.getElementById('notif-list').innerHTML = ''; 
+  google.script.run
+    .withSuccessHandler(function(data) { 
+      document.getElementById('load-notif').style.display = 'none'; 
+      var html = ''; 
+      ((data && data.historico) || []).filter(function(h) { return h.diferenca !== 0; }).slice(0, 10).forEach(function(d) { 
+        html += '<div class="card"><div class="prod-item"><div class="prod-info"><div class="prod-name">' + d.nome + '</div><div class="prod-meta">Por ' + d.responsavel + '</div></div><div style="font-weight:800;color:' + (d.diferenca < 0 ? '#f87171' : '#fbbf24') + '">' + (d.diferenca < 0 ? 'Falta ' : 'Sobra ') + d.diferenca + '</div></div></div>'; 
+      }); 
+      document.getElementById('notif-list').innerHTML = html || '<div class="card empty">Nenhuma notificação.</div>'; 
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('load-notif').style.display = 'none'; 
+      window.toast('Erro ao carregar notificações.', 'er');
+    })
+    .getBIFullData(); 
+};
 </script>
 </body>
 </html>
