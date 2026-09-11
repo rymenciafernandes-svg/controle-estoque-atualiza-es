@@ -367,6 +367,7 @@ select.input option { background: #0b0d14; color: #fff; }
       <button class="btn-more" id="btn-go-solicitar" onclick="window.nav('solicitar')" style="margin-top:0">Solicitar Cadastro de Acesso</button>
     </div>
   </div>
+  
   <!-- TELA SOLICITAÇÃO -->
 <div id="p-solicitar" class="page">
   <div class="page-header">
@@ -1245,12 +1246,7 @@ window.executarSolicitacao = function() {
     })
     .solicitarAcesso({ nome: nome, funcao: funcao, local: local, telefone: telefone });
 };
-    
-    <div id="load-venc-cli" class="loading" style="display:none"><div class="spin"></div>Carregando clientes do relatório...</div>
-    <div id="lista-venc-cliente"></div>
-  </div>
-</div>
-</div>
+
 document.addEventListener('DOMContentLoaded', function() {
 
   // ABRIR E FECHAR O MENU LATERAL (DRAWER)
