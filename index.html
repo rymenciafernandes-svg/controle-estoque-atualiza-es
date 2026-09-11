@@ -1259,7 +1259,6 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('drawer-tools', 'click', function(e) {
     if (e.target === this) this.style.display = 'none';
   });
-  
   document.querySelectorAll('[data-nav]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var target = this.getAttribute('data-nav');
