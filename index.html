@@ -1181,7 +1181,7 @@ window.executarLogin = function() {
     if (btn) { btn.disabled = false; btn.textContent = 'ENTRAR'; }
     window.toast('Servidor demorou a responder. Tente novamente.', 'er');
   }, 30000);
-
+2
   google.script.run
     .withSuccessHandler(function(res){
       clearTimeout(timerTrava);
