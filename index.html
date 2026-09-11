@@ -16,7 +16,7 @@
 // ============================================
 // PONTE DE COMUNICAÇÃO GITHUB -> GOOGLE SHEETS
 // ============================================
-const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwvyhAd-Rhi_qFZJfQfddS8dpPw_Wg2V9LSXjOAdYYfSOBf-tkKqmLiOZbHbMqIFG5C/exec";
+const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwV6eeEDAEnOyoXXk95jyPaXq1Xkx5piTvCmH5NPJF9TO1fpGIqufo6By6ZVjKkUnoI/exec";
 
 if (typeof google === 'undefined' || !google.script || !google.script.run) {
   window.google = window.google || {};
@@ -778,7 +778,7 @@ select.input option { background: #0b0d14; color: #fff; }
   </div>
 </div>
   
-  <div class="modal-cam" id="modal-venc-cliente-edit">
+<div class="modal-cam" id="modal-venc-cliente-edit">
   <div class="modal-cam-content" style="max-width:400px;text-align:left;padding:20px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div style="font-size:15px;font-weight:800;color:#fff;word-break:break-word" id="vc-cliente-nome">Vencimento de Cliente</div>
@@ -1548,9 +1548,9 @@ window.renderListaVencClientes = function() {
       (item.observacao || '').toLowerCase().indexOf(busca) > -1;
     
     var status = 'PENDENTE';
-    var dtRefStr = item.dataVencAte || item.dataVenc;
-    if (dtRefStr) {
-      var parts = dtRefStr.split('/');
+    var dtRef = item.dataVencAte || item.dataVenc;
+    if (dtRef) {
+      var parts = dtRef.split('/');
       if (parts.length === 3) {
         var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
         var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
@@ -1564,34 +1564,17 @@ window.renderListaVencClientes = function() {
     var matchCat = (filtroCat === 'TODAS') || (status === filtroCat);
     
     var matchData = true;
-    var cStart = null;
-    var cEnd = null;
-    
-    if (item.dataVenc) {
-      var p1 = item.dataVenc.split('/');
-      if (p1.length === 3) cStart = new Date(p1[2], p1[1] - 1, p1[0]);
+    if (dtDe && dtRef) {
+      var parts = dtRef.split('/');
+      var d = new Date(parts[2], parts[1] - 1, parts[0]);
+      var dDe = new Date(dtDe.split('-')[0], dtDe.split('-')[1] - 1, dtDe.split('-')[2]);
+      if (d < dDe) matchData = false;
     }
-    if (item.dataVencAte) {
-      var p2 = item.dataVencAte.split('/');
-      if (p2.length === 3) cEnd = new Date(p2[2], p2[1] - 1, p2[0]);
-    }
-    
-    if (!cStart) cStart = cEnd;
-    if (!cEnd) cEnd = cStart;
-
-    if (cStart && cEnd) {
-      if (dtDe) {
-        var pDe = dtDe.split('-');
-        var fStart = new Date(pDe[0], pDe[1] - 1, pDe[2]);
-        if (cEnd < fStart) matchData = false;
-      }
-      if (dtAte && matchData) {
-        var pAte = dtAte.split('-');
-        var fEnd = new Date(pAte[0], pAte[1] - 1, pAte[2]);
-        if (cStart > fEnd) matchData = false;
-      }
-    } else if (dtDe || dtAte) {
-      matchData = false;
+    if (dtAte && dtRef && matchData) {
+      var parts = dtRef.split('/');
+      var d = new Date(parts[2], parts[1] - 1, parts[0]);
+      var dAte = new Date(dtAte.split('-')[0], dtAte.split('-')[1] - 1, dtAte.split('-')[2]);
+      if (d > dAte) matchData = false;
     }
 
     return matchBusca && matchCat && matchData;
@@ -1607,10 +1590,10 @@ window.renderListaVencClientes = function() {
   exibidos.forEach(function(item) {
     var badgeClass = 'b-ok';
     var statusTxt = 'Dia a Dia / Hoje';
-    var dtRefStr = item.dataVencAte || item.dataVenc;
+    var dtRef = item.dataVencAte || item.dataVenc;
     
-    if (dtRefStr) {
-      var parts = dtRefStr.split('/');
+    if (dtRef) {
+      var parts = dtRef.split('/');
       var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
       var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
       
