@@ -664,9 +664,8 @@ select.input option { background: #0b0d14; color: #fff; }
             <option value="VENCIDO">🔴 Vencido</option>
             <option value="QUASE">🟠 Quase Vencendo</option>
             <option value="DIAADIA">🟢 Dia a Dia</option>
-          </select>
+        </select>
         </div>
-        <div>
         <div>
           <div class="card-title" style="margin-bottom:4px">PERÍODO (DE / ATÉ)</div>
           <div style="display:flex;gap:6px;align-items:center;">
@@ -675,7 +674,7 @@ select.input option { background: #0b0d14; color: #fff; }
             <input class="input" id="venc-cli-dt-ate" type="date" title="Até (Data Final)" style="font-size:11px;padding:8px;margin-bottom:0;">
           </div>
         </div>
-    
+
     <div id="load-venc-cli" class="loading" style="display:none"><div class="spin"></div>Carregando clientes do relatório...</div>
     <div id="lista-venc-cliente"></div>
   </div>
@@ -918,7 +917,6 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="drawer-header">
       <div class="drawer-title">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#22c55e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.4a1 1 0 0 0 1.4 0l3.7-3.7a1 1 0 0 0 0-1.4l-1.6-1.4a1 1 0 0 0-1.4 0l-3.7 3.7z"/><path d="M5 13l4 4"/><path d="M11 20l4-4"/><path d="M15 12l2 2"/><path d="M18.8 3.2L12.5 9.5a2.12 2.12 0 0 0-.6 1.5V14h3a2.12 2.12 0 0 0 1.5-.6l6.3-6.3a1.5 1.5 0 0 0 0-2.1l-2.9-2.9a1.5 1.5 0 0 0-2 0z"/><path d="M3 21h18"/></svg>
-        Ferramentas
       </div>
       <button class="del" id="btn-close-tools" style="width:32px;height:32px">&#x2715;</button>
     </div>
@@ -1548,9 +1546,9 @@ window.renderListaVencClientes = function() {
       (item.observacao || '').toLowerCase().indexOf(busca) > -1;
     
     var status = 'PENDENTE';
-    var dtRef = item.dataVencAte || item.dataVenc;
-    if (dtRef) {
-      var parts = dtRef.split('/');
+    var dtRefStr = item.dataVencAte || item.dataVenc;
+    if (dtRefStr) {
+      var parts = dtRefStr.split('/');
       if (parts.length === 3) {
         var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
         var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
@@ -1564,17 +1562,33 @@ window.renderListaVencClientes = function() {
     var matchCat = (filtroCat === 'TODAS') || (status === filtroCat);
     
     var matchData = true;
-    if (dtDe && dtRef) {
-      var parts = dtRef.split('/');
-      var d = new Date(parts[2], parts[1] - 1, parts[0]);
-      var dDe = new Date(dtDe.split('-')[0], dtDe.split('-')[1] - 1, dtDe.split('-')[2]);
-      if (d < dDe) matchData = false;
+    var cStart = null, cEnd = null;
+    
+    if (item.dataVenc) {
+      var p1 = item.dataVenc.split('/');
+      if (p1.length === 3) cStart = new Date(p1[2], p1[1] - 1, p1[0]);
     }
-    if (dtAte && dtRef && matchData) {
-      var parts = dtRef.split('/');
-      var d = new Date(parts[2], parts[1] - 1, parts[0]);
-      var dAte = new Date(dtAte.split('-')[0], dtAte.split('-')[1] - 1, dtAte.split('-')[2]);
-      if (d > dAte) matchData = false;
+    if (item.dataVencAte) {
+      var p2 = item.dataVencAte.split('/');
+      if (p2.length === 3) cEnd = new Date(p2[2], p2[1] - 1, p2[0]);
+    }
+    
+    if (!cStart) cStart = cEnd;
+    if (!cEnd) cEnd = cStart;
+
+    if (cStart && cEnd) {
+      if (dtDe) {
+        var pDe = dtDe.split('-');
+        var fStart = new Date(pDe[0], pDe[1] - 1, pDe[2]);
+        if (cEnd < fStart) matchData = false;
+      }
+      if (dtAte && matchData) {
+        var pAte = dtAte.split('-');
+        var fEnd = new Date(pAte[0], pAte[1] - 1, pAte[2]);
+        if (cStart > fEnd) matchData = false;
+      }
+    } else if (dtDe || dtAte) {
+      matchData = false;
     }
 
     return matchBusca && matchCat && matchData;
@@ -1590,10 +1604,10 @@ window.renderListaVencClientes = function() {
   exibidos.forEach(function(item) {
     var badgeClass = 'b-ok';
     var statusTxt = 'Dia a Dia / Hoje';
-    var dtRef = item.dataVencAte || item.dataVenc;
+    var dtRefStr = item.dataVencAte || item.dataVenc;
     
-    if (dtRef) {
-      var parts = dtRef.split('/');
+    if (dtRefStr) {
+      var parts = dtRefStr.split('/');
       var dtObj = new Date(parts[2], parts[1] - 1, parts[0]);
       var diffDias = Math.ceil((dtObj - hoje) / (1000 * 60 * 60 * 24));
       
@@ -1719,7 +1733,7 @@ window.renderListaVencClientes = function() {
     
     janela.document.write('<div style="margin-top: 45px; font-size: 12px; font-weight: bold;">');
     janela.document.write('  <div style="display:flex; justify-content:space-between; margin-bottom: 25px;">');
-    janela.document.write('    <span style="flex:1;">Responsável pelo Turno Atual......: _____________________________________</span>');
+    janela.document.write('    <span style="flex:1;">Responsável pelo Turno Atual: _____________________________________</span>');
     janela.document.write('    <span style="width: 220px; text-align:right;">Visto: ___________________</span>');
     janela.document.write('  </div>');
     janela.document.write('  <div style="display:flex; justify-content:space-between;">');
