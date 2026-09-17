@@ -1686,17 +1686,16 @@ window.renderContagem = function() {
       var qtd = contagensAtuais[p.id] !== undefined ? contagensAtuais[p.id] : 0;
       var imgHtml = (p.fotoUrl && p.fotoUrl !== 'NOT_FOUND') ? '<img src="' + p.fotoUrl + '" alt="foto">' : '📦';
       var thumbDiv = '<div class="prod-thumb">' + imgHtml + '</div>';
-      html += '<div class="prod-item">' + thumbDiv + 
-       '<div class="prod-counter">' +
-          '<button class="btn-qty" onclick="abrirModalValidadeDireta(\'' + p.id + '\')" title="Registrar Validade" style="background:rgba(245,158,11,0.15);color:#fbbf24;border-color:rgba(245,158,11,0.3);width:34px;height:34px;font-size:14px;margin-right:4px;">📅</button>' +
-          '<button class="btn-qty" onclick="alterarQtd(\'' + p.id + '\', -1)">-</button>' +
-          '<input class="qty-input" id="qty-' + p.id + '" value="' + qtd + '" onchange="definirQtd(\'' + p.id + '\', this.value)" type="number" min="0">' +
-          '<button class="btn-qty" onclick="alterarQtd(\'' + p.id + '\', 1)">+</button>' +
-          '<button class="btn-qty" onclick="somarEmLote(\'' + p.id + '\')" title="Somar quantidade em lote" style="background:rgba(16,185,129,0.15);color:#10b981;font-size:13px;width:34px;margin-left:4px;">+📝</button>' +
-        '</div></div>';
+     html += '<div class="prod-item">' + thumbDiv +
+      '<div class="prod-info"><div class="prod-name">' + p.nome + '</div><div class="prod-meta" id="meta-' + p.id + '">' + window.gerarMetaHtml(p, qtd) + '</div></div>' +
+      '<div class="prod-counter">' +
+        '<button class="btn-qty" onclick="abrirModalValidadeDireta(\'' + p.id + '\')" title="Registrar Validade" style="background:rgba(245,158,11,0.15);color:#fbbf24;border-color:rgba(245,158,11,0.3);width:34px;height:34px;font-size:14px;margin-right:4px;">📅</button>' +
+        '<button class="btn-qty" onclick="alterarQtd(\'' + p.id + '\', -1)">-</button>' +
+        '<input class="qty-input" id="qty-' + p.id + '" value="' + qtd + '" onchange="definirQtd(\'' + p.id + '\', this.value)" type="number" min="0">' +
+        '<button class="btn-qty" onclick="alterarQtd(\'' + p.id + '\', 1)">+</button>' +
+        '<button class="btn-qty" onclick="somarEmLote(\'' + p.id + '\')" title="Somar quantidade em lote" style="background:rgba(16,185,129,0.15);color:#10b981;font-size:13px;width:34px;margin-left:4px;">+📝</button>' +
+      '</div></div>';
     });
-    html += '</div>';
-  });
   if (filtrados.length > limiteExibicao) html += '<button class="btn-more" id="btn-load-more">Carregar Mais (' + (filtrados.length - limiteExibicao) + ' restantes)</button>';
   container.innerHTML = html;
   var btnLoadMore = document.getElementById('btn-load-more');
