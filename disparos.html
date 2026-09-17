@@ -81,6 +81,8 @@
 
 <script>
   let clientesBase = [];
+  
+  // AQUI ESTÁ A SUA URL CORRETA E ATUALIZADA
   const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxpcVOdE-4pecUb83Px-ClAgSYGGtPVdOmQMoxKUY7Go3vj7oRtc_WBzzPdOijmZ87P/exec";
 
   function showToast(msg) {
@@ -89,31 +91,41 @@
     el.style.display = 'block';
     setTimeout(() => { el.style.display = 'none'; }, 3000);
   }
-  
-// Busca os clientes na aba Analítica assim que a página abre
+
+  // Busca os clientes na aba Analítica
   fetch(GOOGLE_WEB_APP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: 'getClientesParaDisparo', args: [] })
   })
-  .then(res => res.json())
+  .then(res => {
+    if (!res.ok) throw new Error("Erro de conexão com o Google (" + res.status + ")");
+    return res.json();
+  })
   .then(res => {
     if (res.sucesso) {
       clientesBase = res.dados || [];
       renderizarClientes();
     } else {
-      document.getElementById('lista-clientes').innerHTML = `<div style="color:#ef4444; padding:10px; text-align:center;">Erro: ${res.mensagem}</div>`;
+      document.getElementById('lista-clientes').innerHTML = `<div style="color:#ef4444; padding:10px; text-align:center; font-weight:bold;">Erro na Planilha: ${res.mensagem}<br><span style="font-size:11px;">(Você adicionou 'getClientesParaDisparo: true' na Whitelist e fez Nova Implantação?)</span></div>`;
     }
+    carregarLotesSalvos();
+  })
+  .catch(err => {
+    document.getElementById('lista-clientes').innerHTML = `<div style="color:#ef4444; padding:10px; text-align:center; font-weight:bold;">Falha de Comunicação!<br><span style="font-size:12px; color:#cbd5e1;">${err.message}</span></div>`;
     carregarLotesSalvos();
   });
 
   function renderizarClientes() {
     const container = document.getElementById('lista-clientes');
+    if(clientesBase.length === 0) {
+      container.innerHTML = '<div style="padding:10px; color:#94a3b8; text-align:center;">Nenhum cliente encontrado no Analítico.</div>';
+      return;
+    }
+    
     let html = '';
     clientesBase.forEach((cli, idx) => {
-      // Se não tiver telefone, avisa na tela
       let badgeTel = cli.telefone ? `<span style="font-size:10px; color:#22c55e;">📱 ${cli.telefone}</span>` : `<span style="font-size:10px; color:#ef4444;">❌ Sem número</span>`;
-      
       html += `<label class="client-item" id="item-${idx}">
                  <input type="checkbox" value="${cli.nome}|${cli.telefone}" onchange="atualizarContador()">
                  <div style="display:flex; flex-direction:column; gap:2px;">
@@ -164,6 +176,10 @@
       btn.disabled = false; btn.textContent = '💾 Gravar Lote no Sistema';
       showToast('Lote Salvo!');
       carregarLotesSalvos();
+    })
+    .catch(err => {
+      btn.disabled = false; btn.textContent = '💾 Gravar Lote no Sistema';
+      showToast('Erro ao salvar. Verifique conexão.');
     });
   }
 
@@ -191,9 +207,7 @@
                    <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
                      <div style="font-size:11px; font-weight:800; color:#cbd5e1; margin-bottom:6px;">FILA DE ENVIO:</div>`;
         
-        // AQUI ESTAVA O PROBLEMA - agora limpo e sem repetição
         let arrayClientes = String(lote.clientes).split(',');
-        
         arrayClientes.forEach(cliDados => {
            let partes = cliDados.split('|');
            let nomeCli = partes[0] ? partes[0].trim() : '';
@@ -208,9 +222,17 @@
                       <a href="${linkWa}" target="_blank" class="wpp-btn" style="background:${btnCor};" onclick="this.style.background='#475569'; this.textContent='Enviado ✔️'">▶ Disparar</a>
                     </div>`;
         });
-        
         html += `</div></div>`;
       });
+      container.innerHTML = html;
+    })
+    .catch(err => {
+      document.getElementById('lotes-pendentes').innerHTML = '<div style="color:#ef4444; text-align:center;">Erro ao carregar lotes.</div>';
+    });
+  }
+</script>
+</body>
+</html>
       container.innerHTML = html;
     });
   }
