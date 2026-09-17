@@ -91,15 +91,20 @@
   }
 
   // Busca os clientes na planilha assim que a página abre
+// Busca os clientes na aba Analítica assim que a página abre
   fetch(GOOGLE_WEB_APP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action: 'getVencimentosClientes', args: [] })
+    body: JSON.stringify({ action: 'getClientesParaDisparo', args: [] })
   })
   .then(res => res.json())
   .then(res => {
-    clientesBase = res || [];
-    renderizarClientes();
+    if (res.sucesso) {
+      clientesBase = res.dados || [];
+      renderizarClientes();
+    } else {
+      document.getElementById('lista-clientes').innerHTML = `<div style="color:#ef4444; padding:10px; text-align:center;">Erro: ${res.mensagem}</div>`;
+    }
     carregarLotesSalvos();
   });
 
@@ -107,9 +112,15 @@
     const container = document.getElementById('lista-clientes');
     let html = '';
     clientesBase.forEach((cli, idx) => {
+      // Se não tiver telefone, avisa na tela
+      let badgeTel = cli.telefone ? `<span style="font-size:10px; color:#22c55e;">📱 ${cli.telefone}</span>` : `<span style="font-size:10px; color:#ef4444;">❌ Sem número</span>`;
+      
       html += `<label class="client-item" id="item-${idx}">
-                 <input type="checkbox" value="${cli.nome}" onchange="atualizarContador()">
-                 <span style="font-weight:600; font-size:13px;">${cli.nome}</span>
+                 <input type="checkbox" value="${cli.nome}|${cli.telefone}" onchange="atualizarContador()">
+                 <div style="display:flex; flex-direction:column; gap:2px;">
+                   <span style="font-weight:600; font-size:13px;">${cli.nome}</span>
+                   ${badgeTel}
+                 </div>
                </label>`;
     });
     container.innerHTML = html;
