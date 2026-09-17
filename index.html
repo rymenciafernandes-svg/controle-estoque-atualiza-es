@@ -2291,11 +2291,54 @@ window.atualizarPreviewCartaz = function() {
   document.getElementById('prev-price-dec').textContent = decPart;
 };
 safeAddEvent('btn-print-cartaz', 'click', function() {
-  document.body.classList.add('printing-cartaz');
-  var limpar = function() { document.body.classList.remove('printing-cartaz'); window.removeEventListener('afterprint', limpar); };
-  window.addEventListener('afterprint', limpar);
-  setTimeout(function() { window.print(); }, 60);
-});
+    var nome = document.getElementById('prev-prod-title').textContent;
+    var intPart = document.getElementById('prev-price-int').textContent;
+    var decPart = document.getElementById('prev-price-dec').textContent;
+    
+    var janela = window.open('', '_blank');
+    if (!janela) { window.toast('Desative o bloqueador de popups para imprimir.', 'er'); return; }
+    
+    janela.document.write('<html><head><title>Cartaz Promocional - ' + nome + '</title>');
+    janela.document.write('<style>');
+    janela.document.write('@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&family=Oswald:wght@700&display=swap");');
+    
+    // Força a impressão das cores de fundo no Chrome, Edge e Firefox
+    janela.document.write('* { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }');
+    janela.document.write('body { background:#fff; display:flex; align-items:center; justify-content:center; min-height:100vh; padding:0; }');
+    
+    // DESIGN CLÁSSICO - AMARELO E VERMELHO A4
+    janela.document.write('.poster-page { width:210mm; height:297mm; background-color:#fef08a !important; border:12px solid #dc2626 !important; display:flex; flex-direction:column; overflow:hidden; position:relative; page-break-after:always; }');
+    janela.document.write('.poster-header-banner { background-color:#dc2626 !important; padding:50px 20px 90px; text-align:center; clip-path: polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%); -webkit-clip-path: polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%); }');
+    janela.document.write('.poster-header-title { font-size:95px; font-weight:900; letter-spacing:3px; color:#ffffff !important; text-transform:uppercase; font-family:"Montserrat", sans-serif; text-shadow:5px 5px 0px #991b1b; }');
+    janela.document.write('.poster-body-content { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap: 50px; padding:40px 30px; text-align:center; }');
+    janela.document.write('.poster-prod-title { font-size:75px; font-weight:800; color:#000000 !important; text-transform:uppercase; line-height:1.1; word-break:break-word; max-width:95%; font-family:"Oswald", sans-serif; }');
+    janela.document.write('.poster-price-container { display:flex; align-items:baseline; justify-content:center; font-weight:900; color:#dc2626 !important; font-family:"Montserrat", sans-serif; text-shadow: 4px 4px 0px rgba(0,0,0,0.15); }');
+    janela.document.write('.poster-price-symbol { font-size:80px; margin-right:12px; font-weight:900; }');
+    janela.document.write('.poster-price-big { font-size:360px; line-height:0.75; font-weight:900; letter-spacing:-10px; }');
+    janela.document.write('.poster-price-cents { font-size:130px; font-weight:900; margin-left:8px; text-decoration: underline; }');
+    
+    janela.document.write('@media print { @page { size: A4; margin: 0; } body { padding:0; margin:0; } .poster-page { width:100vw; height:100vh; border:none !important; } }');
+    janela.document.write('</style></head><body>');
+    
+    janela.document.write('<div class="poster-page">');
+    janela.document.write('  <div class="poster-header-banner"><div class="poster-header-title">PROMOÇÃO</div></div>');
+    janela.document.write('  <div class="poster-body-content">');
+    janela.document.write('    <div class="poster-prod-title">' + nome + '</div>');
+    janela.document.write('    <div class="poster-price-container">');
+    janela.document.write('      <span class="poster-price-symbol">R$</span>');
+    janela.document.write('      <span class="poster-price-big">' + intPart + '</span>');
+    janela.document.write('      <span class="poster-price-cents">' + decPart + '</span>');
+    janela.document.write('    </div>');
+    janela.document.write('  </div>');
+    janela.document.write('</div>');
+    
+    janela.document.write('</body></html>');
+    janela.document.close();
+    janela.focus();
+    
+    // Pequeno atraso (800ms) para dar tempo de a fonte personalizada carregar antes de abrir a janela de impressão
+    setTimeout(function() { janela.print(); janela.close(); }, 800);
+  });
 // ============================================
 // NOTA FISCAL E FATURAMENTO (PLANILHA EXTERNA)
 // ============================================
