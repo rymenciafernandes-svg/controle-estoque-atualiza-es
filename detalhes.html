@@ -11,8 +11,9 @@
   .container { max-width: 600px; margin: 0 auto; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
   .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 20px; }
   .title { font-size: 20px; font-weight: 800; color: #38bdf8; }
-  .info-row { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 14px; }
-  .info-row:last-child { border: none; }
+  .info-row { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); background: rgba(0,0,0,0.2); margin-bottom: 6px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .info-label { font-size: 10px; color: #94a3b8; font-weight: 800; text-transform: uppercase; }
+  .info-value { font-size: 15px; font-weight: 600; color: #fff; }
   .loading { text-align: center; color: #94a3b8; font-size: 14px; margin: 40px 0; }
   .btn-fechar { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: bold; }
 </style>
@@ -29,20 +30,17 @@
 </div>
 
 <script>
-  // 1. Pegar o nome do cliente pela URL da página
   const urlParams = new URLSearchParams(window.location.search);
-  const clienteId = urlParams.get('id');
+  const clienteId = urlParams.get('id') || urlParams.get('nome');
   const clienteNome = urlParams.get('nome');
   
-  if (clienteNome) {
-    document.getElementById('nome-cliente').textContent = clienteNome;
-  }
+  if (clienteNome) document.getElementById('nome-cliente').textContent = clienteNome;
 
-  // 2. Chamar o Google Apps Script para buscar a linha dele
-  const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw9RJdLBqWYfJvA-NgCNuEoUtRv8exk39UIFsWmZb9fj8AYygtD0k-BqOgder3JILn2/exec";
+  const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyrFIAfFGO0jD-vSX0TznI9eWipwPXpFu1akqAYKEs7ILzWJKI7UVew0WtC4FzPgFk/exec";
 
   fetch(GOOGLE_WEB_APP_URL, {
     method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: 'getDetalhesCliente', args: [clienteId] })
   })
   .then(res => res.json())
@@ -50,18 +48,18 @@
     document.getElementById('loading').style.display = 'none';
     const container = document.getElementById('dados-container');
     
-    if (res.sucesso && res.dados.length > 0) {
+    if (res.sucesso && res.dados && res.dados.length > 0) {
       let html = '';
       res.dados.forEach((dado, index) => {
-        html += `<div class="info-row"><strong>Coluna/Dado ${index + 1}:</strong> ${dado}</div>`;
+        html += `<div class="info-row"><span class="info-label">Informação Registrada</span><span class="info-value">${dado}</span></div>`;
       });
       container.innerHTML = html;
     } else {
-      container.innerHTML = `<div class="loading">Nenhum detalhe extra encontrado para este cliente.</div>`;
+      container.innerHTML = `<div class="loading">${res.mensagem || 'Nenhum detalhe extra encontrado.'}</div>`;
     }
   })
   .catch(err => {
-    document.getElementById('loading').textContent = 'Erro ao carregar dados.';
+    document.getElementById('loading').textContent = 'Erro ao se comunicar com o banco de dados.';
   });
 </script>
 </body>
