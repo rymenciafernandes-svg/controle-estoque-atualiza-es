@@ -192,28 +192,26 @@
                    <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
                      <div style="font-size:11px; font-weight:800; color:#cbd5e1; margin-bottom:6px;">FILA DE ENVIO:</div>`;
         
-      let clientesArray = String(lote.clientes).split(',');
-        clientesArray.forEach(cliDados => {
-           // O dado vem como "NOME|TELEFONE"
+        // AQUI ESTAVA O PROBLEMA - agora limpo e sem repetição
+        let arrayClientes = String(lote.clientes).split(',');
+        
+        arrayClientes.forEach(cliDados => {
            let partes = cliDados.split('|');
            let nomeCli = partes[0] ? partes[0].trim() : '';
            let numZap = partes[1] ? partes[1].trim() : '';
            
            let msgFinal = txtCodificado.replace('%7Bnome%7D', encodeURIComponent(nomeCli));
-           
-           // Monta o link mágico do WhatsApp. Se tiver número ele manda direto, se não, só abre pra você escolher.
            let linkWa = numZap ? `https://wa.me/55${numZap}?text=${msgFinal}` : `https://wa.me/?text=${msgFinal}`;
-           
-           let btnCor = numZap ? '#25D366' : '#94a3b8'; // Verde se tem número, Cinza se tá faltando
+           let btnCor = numZap ? '#25D366' : '#94a3b8';
 
            html += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:8px 12px; border-radius:8px; margin-bottom:6px;">
                       <span style="font-size:13px; font-weight:700;">${nomeCli}</span>
                       <a href="${linkWa}" target="_blank" class="wpp-btn" style="background:${btnCor};" onclick="this.style.background='#475569'; this.textContent='Enviado ✔️'">▶ Disparar</a>
                     </div>`;
         });
+        
+        html += `</div></div>`;
+      });
       container.innerHTML = html;
     });
   }
-</script>
-</body>
-</html>
