@@ -13,7 +13,7 @@
 // ============================================
 // PONTE DE COMUNICAÇÃO GITHUB -> GOOGLE SHEETS
 // ============================================
-const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw6pQF9Zzef1MXJZuQcMVR--O5c9xFsLmIeK4eVUsrJBOqB8Fp5zd2oZPhWutWTKEm3/exec";
+const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz4CBrn8nEKUHZ5hI6SyJDLwlN6oVA49kYFuoTtDkgobVfEIRm5VDg7enjYCsGo5pLT/exec";
 if (typeof google === 'undefined' || !google.script || !google.script.run) {
   window.google = window.google || {};
   window.google.script = window.google.script || {};
@@ -1296,8 +1296,38 @@ window.executarSolicitacao = function() {
       window.toast('Erro de comunicação.', 'er'); 
     })
     .solicitarAcesso({ nome: nome, funcao: funcao, local: local, telefone: telefone });
-};
+  function carregarSistemaOtimizado() {
+  const cacheValidades = localStorage.getItem('cache_validades');
+  const cacheClientes = localStorage.getItem('cache_clientes');
+
+  if (cacheValidades && typeof renderizarValidades === 'function') {
+    renderizarValidades(JSON.parse(cacheValidades));
+  }
+  if (cacheClientes && typeof renderizarClientes === 'function') {
+    renderizarClientes(JSON.parse(cacheClientes));
+  }
+
+  fetch(GOOGLE_WEB_APP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'carregarDadosIniciais' })
+  })
+  .then(res => res.json())
+  .then(res => {
+    if (res.sucesso) {
+      localStorage.setItem('cache_validades', JSON.stringify(res.validades));
+      localStorage.setItem('cache_clientes', JSON.stringify(res.clientes));
+      if (typeof renderizarValidades === 'function') renderizarValidades(res.validades);
+      if (typeof renderizarClientes === 'function') renderizarClientes(res.clientes);
+    }
+  })
+  .catch(err => console.log("Usando memória local:", err));
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+  // Carrega os dados otimizados assim que a página abre
+  carregarSistemaOtimizado();
+
   // ABRIR E FECHAR O MENU LATERAL (DRAWER)
   safeAddEvent('btn-open-tools', 'click', function() {
     document.getElementById('drawer-tools').style.display = 'flex';
@@ -1308,6 +1338,7 @@ document.addEventListener('DOMContentLoaded', function() {
   safeAddEvent('drawer-tools', 'click', function(e) {
     if (e.target === this) this.style.display = 'none';
   });
+
   // Navegação geral por botões
   document.querySelectorAll('[data-nav]').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -1317,6 +1348,7 @@ document.addEventListener('DOMContentLoaded', function() {
       window.nav(target);
     });
   });
+});
   safeAddEvent('file-cam-input', 'change', async function(e) {
     if (!e.target.files || e.target.files.length === 0) return;
     var imageFile = e.target.files[0];
