@@ -13,7 +13,7 @@
 // ============================================
 // PONTE DE COMUNICAÇÃO GITHUB -> GOOGLE SHEETS
 // ============================================
-const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxZrQ9UtqP2TSN4ASGlZslmqTwgqP-C5NqHwE2XYljxIErsbjyu9h2WwO9hSmMZ5Zee/exec";
+const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwJ41VPNZXKlwPc5ifhtGFKTVauATZi4aNRVl66WP4QT94zK3n9CP5YbKFs9-59-jjW/exec";
 if (typeof google === 'undefined' || !google.script || !google.script.run) {
   window.google = window.google || {};
   window.google.script = window.google.script || {};
@@ -607,6 +607,9 @@ select.input option { background: #0b0d14; color: #fff; }
     <div class="page-title">Controle de Validades</div>
   </div>
   <div class="page-body">
+    <button class="btn-save" onclick="enviarAlertaValidade()" style="background: #ef4444; margin-bottom: 15px; border-radius: 8px;">
+        <span>📩</span> Enviar Relatório por E-mail Agora
+      </button>
     <div class="card">
       <div class="card-title">REGISTRAR VENCIMENTO DE PRODUTO</div>
       <div class="input-group" style="margin-bottom:8px">
@@ -964,7 +967,26 @@ select.input option { background: #0b0d14; color: #fff; }
 </div>
 <script>
   var modoEdicao = false;
-
+  
+window.enviarAlertaValidade = function() {
+  if(!confirm("Deseja enviar o relatório de validades para os e-mails cadastrados agora?")) return;
+  
+  alert("O relatório está sendo gerado e enviado. Isso pode levar alguns segundos...");
+  
+  fetch(GOOGLE_WEB_APP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'dispararRelatorioValidadesEmail' })
+  })
+  .then(res => res.json())
+  .then(res => {
+    if(res.sucesso) {
+      alert("✅ " + res.mensagem);
+    } else {
+      alert("❌ " + res.mensagem);
+    }
+  }).catch(e => alert("Erro na comunicação."));
+};
 // FUNÇÃO PARA SOMAR ESTOQUE EM LOTE
 window.somarEmLote = function(id) {
   var inputEl = document.getElementById('qty-' + id);
