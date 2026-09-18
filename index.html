@@ -1296,6 +1296,7 @@ window.executarSolicitacao = function() {
       window.toast('Erro de comunicação.', 'er'); 
     })
     .solicitarAcesso({ nome: nome, funcao: funcao, local: local, telefone: telefone });
+  };
   function carregarSistemaOtimizado() {
   const cacheValidades = localStorage.getItem('cache_validades');
   const cacheClientes = localStorage.getItem('cache_clientes');
